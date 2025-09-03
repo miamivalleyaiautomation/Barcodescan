@@ -33,7 +33,6 @@
   .video-card{background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative}
   .viewport{width:100%;height:clamp(220px,38vh,420px);display:block}
   .overlay{position:absolute;inset:0;pointer-events:none}
-  .touch-layer{position:absolute;inset:0;cursor:crosshair} /* receives taps */
   .trigger{position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.55));border-top:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(1.2) blur(6px)}
   .armed{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;border:1px solid rgba(46,204,113,.4);background:rgba(46,204,113,.15);border-radius:999px;font-weight:700;letter-spacing:.3px;color:var(--good)}
   .badge{background:#15223f;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
@@ -93,7 +92,7 @@
     </div>
 
     <h3 style="margin-top:14px;">2D Decoding (ZXing)</h3>
-    <p class="subtle">Restricted to <strong>QR</strong> and <strong>Data Matrix</strong>. Tap video to focus; press <b>Trigger</b> to arm for 3s.</p>
+    <p class="subtle">Restricted to <strong>QR</strong> and <strong>Data Matrix</strong>. Press <b>Trigger</b> to arm for 3s.</p>
     <div class="row"><label class="chip-inp"><input type="checkbox" id="beep2d" checked> Beep / haptic</label></div>
 
     <p class="subtle">Tip: iOS requires HTTPS (Netlify) or localhost (iHost) for camera access.</p>
@@ -106,11 +105,9 @@
       <!-- 2D stream -->
       <video id="video2d" class="viewport" playsinline muted style="display:none"></video>
 
-      <!-- overlay + tap-to-focus layer -->
+      <!-- overlay (reticle only) -->
       <canvas id="overlay" class="overlay"></canvas>
-      <div id="touchLayer" class="touch-layer" aria-label="Tap to focus"></div>
 
-      <!-- controls -->
       <div class="trigger">
         <button id="triggerBtn" class="btn btn--p">🎯 Trigger (3s)</button>
         <span id="armedBadge" class="armed" hidden>ARMED</span>
@@ -149,7 +146,6 @@
   const cameraSel=$('#cameraSelect'), camInfo=$('#camInfo'), preferBack=$('#preferBack');
   const readers1d=$('#readers1d'), tryHarder=$('#tryHarder'), beep1d=$('#beep1d'), beep2d=$('#beep2d');
   const viewport=$('#viewport'), video2d=$('#video2d'), overlay=$('#overlay'), octx=overlay.getContext('2d');
-  const touchLayer=$('#touchLayer');
   const results=$('#results'), tbody=$('#scanBody'), armedBadge=$('#armedBadge'), statusText=$('#statusText');
 
   // Mode
@@ -159,10 +155,11 @@
   });
 
   // State
-  let ARMED=false, armTimer=null, last={code:'',t:0}, DEDUPE=2000;
+  let ARMED=false, armTimer=null, last={code:'',t:0}, DEDUPE=2500;
   let currentDeviceId = localStorage.getItem('scanner.devId') || '';
+  let LOCK=false; // prevents double entries on same paint frame
 
-  // Utility: beep + haptic
+  // ---------- Utils ----------
   async function beep(){
     try{
       const ctx=new (window.AudioContext||window.webkitAudioContext)();
@@ -179,9 +176,13 @@
   function ts(){ const d=new Date(); return d.toLocaleTimeString(); }
   function isDupe(code){ const now=Date.now(); if(code===last.code && now-last.t<DEDUPE) return true; last={code, t:now}; return false; }
 
-  // Results
+  // ---------- Results / Table ----------
   function onDecode(type, code, doBeep){
+    if(LOCK) return;
+    LOCK=true;           // block re-entrancy for a moment
+    setArmed(false);     // disarm immediately on first decode
     if(doBeep) beep();
+
     const div=document.createElement('div');
     div.className='badge';
     div.textContent=`${type}: ${code}`;
@@ -192,10 +193,13 @@
     const tr=document.createElement('tr');
     tr.innerHTML=`<td>${type}</td><td>${code}</td><td>${ts()}</td>`;
     tbody.prepend(tr);
+
+    statusText.textContent=`Captured (${type})`;
+    setTimeout(()=>{ LOCK=false; }, 400); // small guard
   }
   $('#clearBtn').addEventListener('click', ()=>{ tbody.innerHTML='<tr><td colspan="3" class="center subtle">No scans yet</td></tr>'; results.innerHTML=''; });
 
-  // Cameras
+  // ---------- Camera helpers ----------
   async function ensurePermission(){
     try{
       const tmp=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
@@ -223,18 +227,30 @@
   }
   cameraSel.addEventListener('change', async ()=>{ currentDeviceId=cameraSel.value; await restart(); });
 
-  // Constraints builder
   function buildConstraints(){
     const id = cameraSel.value || currentDeviceId;
-    if(id){ return { deviceId:{ exact:id }, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} }; }
-    return { facingMode: (preferBack.checked?'environment':'user'), width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} };
+    if(id){ return { deviceId:{ exact:id }, width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} }; }
+    return { facingMode: (preferBack.checked?'environment':'user'), width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} };
   }
 
-  // Overlay / reticle
+  // Apply continuous AF/AE/AWB (best-effort)
+  async function applyAuto(track){
+    try{
+      const caps = track.getCapabilities?.() || {};
+      const adv = [];
+      if(caps.focusMode && caps.focusMode.includes('continuous')) adv.push({ focusMode:'continuous' });
+      if(caps.exposureMode && caps.exposureMode.includes('continuous')) adv.push({ exposureMode:'continuous' });
+      if(caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) adv.push({ whiteBalanceMode:'continuous' });
+      if(caps.zoom){ const z=Math.min(caps.zoom.max||1, Math.max(caps.zoom.min||1, 1.35)); adv.push({ zoom:z }); }
+      if(adv.length) await track.applyConstraints({ advanced: adv });
+    }catch{}
+  }
+
+  // ---------- Overlay ----------
   function sizeOverlay(){
     const el = (mode==='2d') ? video2d : viewport;
     overlay.width  = el.offsetWidth || overlay.clientWidth || 0;
-    overlay.height = el.offsetHeight || overlay.clientHeight || 0;
+    overlay.height = el.offsetHeight || el.clientHeight || 0;
   }
   function clearOverlay(){ octx.clearRect(0,0,overlay.width,overlay.height); }
   function drawReticle(){
@@ -246,58 +262,13 @@
     octx.lineWidth = 2;
     octx.strokeRect(x,y,rw,rh);
   }
-  function drawFocusRing(x,y){
-    octx.save(); octx.strokeStyle='gold'; octx.lineWidth=3;
-    octx.beginPath(); octx.arc(x,y,28,0,Math.PI*2); octx.stroke(); octx.restore();
-    setTimeout(drawReticle, 500);
-  }
 
-  // Tap-to-focus helpers
-  function activeTrack(){
-    try{
-      if(mode==='2d') return (video2d.srcObject && video2d.srcObject.getVideoTracks()[0]) || null;
-      const t = Quagga.CameraAccess?.getActiveTrack?.();
-      if(t) return t;
-      const v = viewport.querySelector('video');
-      return v?.srcObject?.getVideoTracks?.()[0] || null;
-    }catch{ return null; }
-  }
-  async function setContinuousFocus(){
-    const track = activeTrack(); if(!track) return;
-    try{
-      const caps = track.getCapabilities?.() || {};
-      const adv = {};
-      if(caps.focusMode && caps.focusMode.includes('continuous')) adv.focusMode='continuous';
-      if(caps.zoom){ const z=Math.min(caps.zoom.max||1, Math.max(caps.zoom.min||1, 1.4)); adv.zoom=z; }
-      if(Object.keys(adv).length) await track.applyConstraints({ advanced:[adv] });
-    }catch{}
-  }
-  async function tapToFocus(ev){
-    const rect = overlay.getBoundingClientRect();
-    const x = (ev.touches?ev.touches[0].clientX:ev.clientX) - rect.left;
-    const y = (ev.touches?ev.touches[0].clientY:ev.clientY) - rect.top;
-    drawFocusRing(x,y);
-
-    const track = activeTrack(); if(!track) return;
-    try{
-      const caps = track.getCapabilities?.() || {};
-      const nx = Math.min(1, Math.max(0, x / overlay.width));
-      const ny = Math.min(1, Math.max(0, y / overlay.height));
-      const adv = [];
-      if(caps.pointsOfInterest) adv.push({ pointsOfInterest:[{x:nx, y:ny}] });
-      if(caps.focusMode && caps.focusMode.includes('single-shot')) adv.push({ focusMode:'single-shot' });
-      if(adv.length) await track.applyConstraints({ advanced: adv });
-      // revert to continuous focus shortly after
-      setTimeout(setContinuousFocus, 600);
-    }catch{}
-  }
-  touchLayer.addEventListener('click', tapToFocus, {passive:true});
-  touchLayer.addEventListener('touchstart', tapToFocus, {passive:true});
-
-  // Arm / Trigger
+  // ---------- Arm / Trigger ----------
   function setArmed(v){
-    ARMED=v; armedBadge.hidden=!v;
-    statusText.textContent=v?'Armed':'Idle';
+    ARMED=v;
+    armedBadge.hidden=!v;
+    triggerBtn.textContent = v ? '🎯 Armed (3s)' : '🎯 Trigger (3s)';
+    statusText.textContent = v ? 'Armed' : 'Idle';
     if(!v && armTimer){ clearTimeout(armTimer); armTimer=null; }
   }
   triggerBtn.addEventListener('click', ()=>{
@@ -305,7 +276,7 @@
     armTimer=setTimeout(()=>setArmed(false), 3000);
   });
 
-  // 1D (Quagga)
+  // ---------- 1D (Quagga) ----------
   async function start1D(){
     await stop2D();
     sizeOverlay(); drawReticle();
@@ -319,16 +290,7 @@
       }, async err=>{
         if(err){ console.error(err); statusText.textContent='Quagga init error'; reject(err); return; }
 
-        Quagga.onProcessed(res=>{
-          drawReticle();
-          if(res?.box){
-            octx.strokeStyle = ARMED ? 'lime' : 'deepskyblue';
-            octx.lineWidth = 3;
-            octx.beginPath(); res.box.forEach((p,i)=> i?octx.lineTo(p.x,p.y):octx.moveTo(p.x,p.y));
-            octx.closePath(); octx.stroke();
-          }
-        });
-
+        Quagga.onProcessed(()=> drawReticle());
         Quagga.onDetected(res=>{
           if(!ARMED) return;
           const code=res?.codeResult?.code;
@@ -338,7 +300,9 @@
         });
 
         Quagga.start().then(async ()=>{
-          await setContinuousFocus();
+          // try to apply continuous AF/AE/AWB + small zoom
+          const track = Quagga.CameraAccess?.getActiveTrack?.();
+          if(track) await applyAuto(track);
           startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
           resolve();
         }).catch(reject);
@@ -352,7 +316,7 @@
   }
   function get1DReaders(){ return [...readers1d.querySelectorAll('input:checked')].map(i=>i.value); }
 
-  // 2D (ZXing)
+  // ---------- 2D (ZXing) ----------
   let reader2d=null, stream2d=null, raf2d=null;
   function ZX(){ return window.ZXing || window.ZXingBrowser || {}; }
 
@@ -362,7 +326,7 @@
     stream2d = await navigator.mediaDevices.getUserMedia({ video: buildConstraints(), audio:false });
     video2d.srcObject = stream2d; video2d.setAttribute('playsinline',''); video2d.muted=true;
     await video2d.play().catch(()=>{});
-    await setContinuousFocus();
+    const track = stream2d.getVideoTracks?.()[0]; if(track) await applyAuto(track);
     sizeOverlay(); drawReticle();
 
     cancelAnimationFrame(raf2d);
@@ -397,21 +361,19 @@
     cancelAnimationFrame(raf2d); video2d.srcObject=null; video2d.style.display='none'; viewport.style.display='block'; clearOverlay();
   }
 
-  // Start/Stop/Restart
-  async function start(){
-    if(mode==='2d') await start2D(); else await start1D();
-  }
+  // ---------- Lifecycle ----------
+  async function start(){ if(mode==='2d') await start2D(); else await start1D(); }
   async function stop(){ await stop1D(); await stop2D(); startBtn.disabled=false; stopBtn.disabled=true; setArmed(false); statusText.textContent='Stopped'; }
   async function restart(){ await stop(); await start(); }
 
-  // Buttons
   startBtn.addEventListener('click', start);
   stopBtn.addEventListener('click', stop);
   permBtn.addEventListener('click', ensurePermission);
   refreshBtn.addEventListener('click', async ()=>{ await listCameras(); });
 
-  // Init
   window.addEventListener('resize', ()=>{ sizeOverlay(); drawReticle(); });
+
+  // init
   (async ()=>{ try{ await ensurePermission(); await listCameras(); sizeOverlay(); drawReticle(); }catch(e){} })();
 })();
 </script>
