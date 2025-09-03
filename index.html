@@ -18,7 +18,7 @@
   .top{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f1527;border-bottom:1px solid var(--border)}
   .brand{font-weight:800}
   .btn{border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
-  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
   .btn--p{background:var(--primary);color:#001c2b} .btn--d{background:var(--danger);color:#2b0007}
   .chip{background:#18223d;padding:6px 10px;border-radius:999px}
   .wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;max-width:1100px;margin:0 auto}
@@ -42,6 +42,9 @@
   th,td{border-bottom:1px solid var(--border);padding:10px 12px;white-space:nowrap}
   thead th{position:sticky;top:0;background:#0f1527;text-align:left;font-size:12px;color:var(--muted)}
   .center{text-align:center}
+  .status{margin:8px 0;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0d1429;font-size:13px;color:var(--muted)}
+  .status--ok{border-color:rgba(46,204,113,.3);color:#9fe1b8}
+  .status--err{border-color:rgba(255,92,122,.35);color:#ffb5c3}
 </style>
 </head>
 <body>
@@ -61,6 +64,12 @@
     <div class="row">
       <label class="chip-inp"><input type="radio" name="mode" value="1d" checked> 1D Barcodes</label>
       <label class="chip-inp"><input type="radio" name="mode" value="2d"> 2D (QR + Data Matrix)</label>
+    </div>
+
+    <h3>Scan Control</h3>
+    <div class="row">
+      <label class="chip-inp"><input type="radio" name="arm" value="trigger" checked> Trigger (recommended)</label>
+      <label class="chip-inp"><input type="radio" name="arm" value="continuous"> Continuous</label>
     </div>
 
     <h3>Camera</h3>
@@ -92,9 +101,10 @@
     </div>
 
     <h3 style="margin-top:14px;">2D Decoding (ZXing)</h3>
-    <p class="subtle">Restricted to <strong>QR</strong> and <strong>Data Matrix</strong>. Press <b>Trigger</b> to arm for 3s.</p>
+    <p class="subtle">Restricted to <strong>QR</strong> and <strong>Data Matrix</strong>. In Trigger mode, press <b>Trigger</b> to arm for 3s.</p>
     <div class="row"><label class="chip-inp"><input type="checkbox" id="beep2d" checked> Beep / haptic</label></div>
 
+    <div id="statusBox" class="status">Idle</div>
     <p class="subtle">Tip: iOS requires HTTPS (Netlify) or localhost (iHost) for camera access.</p>
   </section>
 
@@ -146,20 +156,24 @@
   const cameraSel=$('#cameraSelect'), camInfo=$('#camInfo'), preferBack=$('#preferBack');
   const readers1d=$('#readers1d'), tryHarder=$('#tryHarder'), beep1d=$('#beep1d'), beep2d=$('#beep2d');
   const viewport=$('#viewport'), video2d=$('#video2d'), overlay=$('#overlay'), octx=overlay.getContext('2d');
-  const results=$('#results'), tbody=$('#scanBody'), armedBadge=$('#armedBadge'), statusText=$('#statusText');
+  const results=$('#results'), tbody=$('#scanBody'), armedBadge=$('#armedBadge'), statusText=$('#statusText'), statusBox=$('#statusBox');
 
-  // Mode
-  let mode='1d';
+  // Modes
+  let codeMode='1d'; // '1d' or '2d'
   document.querySelectorAll('input[name="mode"]').forEach(r=>{
-    r.addEventListener('change',async (e)=>{ mode=e.target.value; await restart(); });
+    r.addEventListener('change',async (e)=>{ codeMode=e.target.value; await restart(); });
+  });
+  let controlMode='trigger'; // 'trigger' or 'continuous'
+  document.querySelectorAll('input[name="arm"]').forEach(r=>{
+    r.addEventListener('change',(e)=>{ controlMode=e.target.value; setArmed(controlMode==='continuous'); });
   });
 
   // State
-  let ARMED=false, armTimer=null, last={code:'',t:0}, DEDUPE=2500;
+  let ARMED=(controlMode==='continuous');
+  let armTimer=null, last={code:'',t:0}, DEDUPE=2500, LOCK=false;
   let currentDeviceId = localStorage.getItem('scanner.devId') || '';
-  let LOCK=false; // prevents double entries on same paint frame
 
-  // ---------- Utils ----------
+  // Utils
   async function beep(){
     try{
       const ctx=new (window.AudioContext||window.webkitAudioContext)();
@@ -176,11 +190,17 @@
   function ts(){ const d=new Date(); return d.toLocaleTimeString(); }
   function isDupe(code){ const now=Date.now(); if(code===last.code && now-last.t<DEDUPE) return true; last={code, t:now}; return false; }
 
-  // ---------- Results / Table ----------
+  function setStatus(msg, ok=false, err=false){
+    statusBox.textContent = msg;
+    statusBox.className = 'status ' + (err?'status--err': ok?'status--ok':'');
+    statusText.textContent = msg;
+  }
+
+  // Results
   function onDecode(type, code, doBeep){
     if(LOCK) return;
-    LOCK=true;           // block re-entrancy for a moment
-    setArmed(false);     // disarm immediately on first decode
+    if(controlMode==='trigger'){ setArmed(false); } // disarm immediately
+    LOCK=true; setTimeout(()=>LOCK=false, 350);     // guard against duplicate callbacks
     if(doBeep) beep();
 
     const div=document.createElement('div');
@@ -194,17 +214,17 @@
     tr.innerHTML=`<td>${type}</td><td>${code}</td><td>${ts()}</td>`;
     tbody.prepend(tr);
 
-    statusText.textContent=`Captured (${type})`;
-    setTimeout(()=>{ LOCK=false; }, 400); // small guard
+    setStatus(`Captured (${type})`, true, false);
   }
   $('#clearBtn').addEventListener('click', ()=>{ tbody.innerHTML='<tr><td colspan="3" class="center subtle">No scans yet</td></tr>'; results.innerHTML=''; });
 
-  // ---------- Camera helpers ----------
+  // Permission + cameras
   async function ensurePermission(){
     try{
       const tmp=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
       tmp.getTracks().forEach(t=>t.stop());
-    }catch(e){ console.warn('Permission error', e); }
+      setStatus('Permission granted', true, false);
+    }catch(e){ setStatus('Permission error: '+(e?.message||e), false, true); }
   }
   async function listCameras(){
     const devs=await navigator.mediaDevices.enumerateDevices();
@@ -227,13 +247,21 @@
   }
   cameraSel.addEventListener('change', async ()=>{ currentDeviceId=cameraSel.value; await restart(); });
 
+  // Constraints + auto settings (best-effort)
+  function baseConstraints(){ return { width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} }; }
+  function fallbackConstraints(){
+    return [
+      { width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} },
+      { width:{ideal:1280}, height:{ideal:720},  frameRate:{ideal:30} },
+      { width:{ideal:640},  height:{ideal:480},  frameRate:{ideal:24} },
+    ];
+  }
   function buildConstraints(){
     const id = cameraSel.value || currentDeviceId;
-    if(id){ return { deviceId:{ exact:id }, width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} }; }
-    return { facingMode: (preferBack.checked?'environment':'user'), width:{ideal:1920}, height:{ideal:1080}, frameRate:{ideal:30} };
+    const base = baseConstraints();
+    if(id){ return { deviceId:{ exact:id }, ...base }; }
+    return { facingMode: (preferBack.checked?'environment':'user'), ...base };
   }
-
-  // Apply continuous AF/AE/AWB (best-effort)
   async function applyAuto(track){
     try{
       const caps = track.getCapabilities?.() || {};
@@ -241,14 +269,14 @@
       if(caps.focusMode && caps.focusMode.includes('continuous')) adv.push({ focusMode:'continuous' });
       if(caps.exposureMode && caps.exposureMode.includes('continuous')) adv.push({ exposureMode:'continuous' });
       if(caps.whiteBalanceMode && caps.whiteBalanceMode.includes('continuous')) adv.push({ whiteBalanceMode:'continuous' });
-      if(caps.zoom){ const z=Math.min(caps.zoom.max||1, Math.max(caps.zoom.min||1, 1.35)); adv.push({ zoom:z }); }
+      if(caps.zoom){ const z=Math.min(caps.zoom.max||1, Math.max(caps.zoom.min||1, 1.3)); adv.push({ zoom:z }); }
       if(adv.length) await track.applyConstraints({ advanced: adv });
     }catch{}
   }
 
-  // ---------- Overlay ----------
+  // Overlay
   function sizeOverlay(){
-    const el = (mode==='2d') ? video2d : viewport;
+    const el = (codeMode==='2d') ? video2d : viewport;
     overlay.width  = el.offsetWidth || overlay.clientWidth || 0;
     overlay.height = el.offsetHeight || el.clientHeight || 0;
   }
@@ -263,36 +291,55 @@
     octx.strokeRect(x,y,rw,rh);
   }
 
-  // ---------- Arm / Trigger ----------
+  // Arm / Trigger
   function setArmed(v){
     ARMED=v;
-    armedBadge.hidden=!v;
-    triggerBtn.textContent = v ? '🎯 Armed (3s)' : '🎯 Trigger (3s)';
-    statusText.textContent = v ? 'Armed' : 'Idle';
-    if(!v && armTimer){ clearTimeout(armTimer); armTimer=null; }
+    armedBadge.hidden=!v || controlMode==='continuous';
+    triggerBtn.textContent = (controlMode==='continuous') ? '🎯 Continuous' : (v?'🎯 Armed (3s)':'🎯 Trigger (3s)');
+    statusText.textContent = v ? 'Armed' : (controlMode==='continuous'?'Continuous':'Idle');
+    if(armTimer){ clearTimeout(armTimer); armTimer=null; }
+    if(controlMode==='trigger' && v){ armTimer=setTimeout(()=>setArmed(false), 3000); }
+    drawReticle();
   }
   triggerBtn.addEventListener('click', ()=>{
+    if(controlMode==='continuous'){ setStatus('Already in continuous mode'); return; }
     setArmed(true);
-    armTimer=setTimeout(()=>setArmed(false), 3000);
   });
 
-  // ---------- 1D (Quagga) ----------
+  // 1D (Quagga) with fallbacks
   async function start1D(){
     await stop2D();
     sizeOverlay(); drawReticle();
+    setStatus('Starting 1D…');
+    const cfgs = fallbackConstraints();
+    for (let i=0;i<cfgs.length;i++){
+      try{
+        await initQuagga({ constraintsOverride: cfgs[i] });
+        setStatus('1D ready', true, false);
+        return;
+      }catch(e){
+        console.warn('Quagga init failed @', cfgs[i], e);
+        if(i===cfgs.length-1){ throw e; }
+      }
+    }
+  }
+  function initQuagga({ constraintsOverride }){
     return new Promise((resolve,reject)=>{
+      const constraints = buildConstraints();
+      const merged = { ...constraints, ...constraintsOverride };
       Quagga.init({
         locate: tryHarder.checked,
-        inputStream: { type:'LiveStream', target: viewport, constraints: buildConstraints() },
+        inputStream: { type:'LiveStream', target: viewport, constraints: merged },
         numOfWorkers: 0,
         locator:{ patchSize:'medium', halfSample:true },
         decoder: { readers: get1DReaders() }
       }, async err=>{
-        if(err){ console.error(err); statusText.textContent='Quagga init error'; reject(err); return; }
+        if(err){ reject(err); return; }
 
         Quagga.onProcessed(()=> drawReticle());
         Quagga.onDetected(res=>{
-          if(!ARMED) return;
+          const active = (controlMode==='continuous') ? true : ARMED;
+          if(!active) return;
           const code=res?.codeResult?.code;
           const fmt=(res?.codeResult?.format||'').toUpperCase();
           if(!code || isDupe(code)) return;
@@ -300,10 +347,11 @@
         });
 
         Quagga.start().then(async ()=>{
-          // try to apply continuous AF/AE/AWB + small zoom
+          // apply AF/AE/AWB
           const track = Quagga.CameraAccess?.getActiveTrack?.();
           if(track) await applyAuto(track);
-          startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
+          startBtn.disabled=true; stopBtn.disabled=false;
+          setArmed(controlMode==='continuous');
           resolve();
         }).catch(reject);
       });
@@ -316,18 +364,35 @@
   }
   function get1DReaders(){ return [...readers1d.querySelectorAll('input:checked')].map(i=>i.value); }
 
-  // ---------- 2D (ZXing) ----------
+  // 2D (ZXing) with fallbacks
   let reader2d=null, stream2d=null, raf2d=null;
   function ZX(){ return window.ZXing || window.ZXingBrowser || {}; }
+
+  async function getStream2d(){
+    const bases = fallbackConstraints();
+    for (let i=0;i<bases.length;i++){
+      try{
+        const id = cameraSel.value || currentDeviceId;
+        const base = bases[i];
+        const cons = id ? { video:{ deviceId:{exact:id}, ...base }, audio:false }
+                        : { video:{ facingMode:(preferBack.checked?'environment':'user'), ...base }, audio:false };
+        return await navigator.mediaDevices.getUserMedia(cons);
+      }catch(e){
+        if(i===bases.length-1) throw e;
+      }
+    }
+  }
 
   async function start2D(){
     await stop1D();
     video2d.style.display='block'; viewport.style.display='none';
-    stream2d = await navigator.mediaDevices.getUserMedia({ video: buildConstraints(), audio:false });
+    sizeOverlay(); drawReticle();
+    setStatus('Starting 2D…');
+
+    stream2d = await getStream2d();
     video2d.srcObject = stream2d; video2d.setAttribute('playsinline',''); video2d.muted=true;
     await video2d.play().catch(()=>{});
     const track = stream2d.getVideoTracks?.()[0]; if(track) await applyAuto(track);
-    sizeOverlay(); drawReticle();
 
     cancelAnimationFrame(raf2d);
     const loop=()=>{ drawReticle(); raf2d=requestAnimationFrame(loop); }; loop();
@@ -335,7 +400,7 @@
     const Z=ZX();
     const BMR = Z.BrowserMultiFormatReader || Z.BrowserQRCodeReader;
     const BF  = Z.BarcodeFormat, H = Z.DecodeHintType;
-    if(!BMR||!BF||!H){ statusText.textContent='ZXing not available'; return; }
+    if(!BMR||!BF||!H){ setStatus('ZXing not available', false, true); return; }
 
     const hints=new Map();
     hints.set(H.POSSIBLE_FORMATS, [BF.QR_CODE,BF.DATA_MATRIX].filter(Boolean));
@@ -343,7 +408,8 @@
     reader2d = new BMR(hints);
 
     reader2d.decodeFromVideoElementContinuously(video2d,(res,err)=>{
-      if(!ARMED) return;
+      const active = (controlMode==='continuous') ? true : ARMED;
+      if(!active) return;
       if(res){
         const code = (typeof res.getText==='function') ? res.getText() : (res.text||'');
         let fmt='QR_CODE';
@@ -353,27 +419,30 @@
       }
     });
 
-    startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
+    startBtn.disabled=true; stopBtn.disabled=false;
+    setArmed(controlMode==='continuous');
+    setStatus('2D ready', true, false);
   }
+
   async function stop2D(){
     try{ reader2d?.reset?.(); }catch{}
     try{ if(stream2d){ stream2d.getTracks().forEach(t=>t.stop()); stream2d=null; } }catch{}
     cancelAnimationFrame(raf2d); video2d.srcObject=null; video2d.style.display='none'; viewport.style.display='block'; clearOverlay();
   }
 
-  // ---------- Lifecycle ----------
-  async function start(){ if(mode==='2d') await start2D(); else await start1D(); }
-  async function stop(){ await stop1D(); await stop2D(); startBtn.disabled=false; stopBtn.disabled=true; setArmed(false); statusText.textContent='Stopped'; }
+  // Lifecycle
+  async function start(){ try{ if(codeMode==='2d') await start2D(); else await start1D(); }catch(e){ setStatus('Start error: '+(e?.message||e), false, true); } }
+  async function stop(){ await stop1D(); await stop2D(); startBtn.disabled=false; stopBtn.disabled=true; setArmed(controlMode==='continuous' ? true : false); setStatus('Stopped'); }
   async function restart(){ await stop(); await start(); }
 
+  // Buttons
   startBtn.addEventListener('click', start);
   stopBtn.addEventListener('click', stop);
   permBtn.addEventListener('click', ensurePermission);
   refreshBtn.addEventListener('click', async ()=>{ await listCameras(); });
 
+  // Init
   window.addEventListener('resize', ()=>{ sizeOverlay(); drawReticle(); });
-
-  // init
   (async ()=>{ try{ await ensurePermission(); await listCameras(); sizeOverlay(); drawReticle(); }catch(e){} })();
 })();
 </script>
