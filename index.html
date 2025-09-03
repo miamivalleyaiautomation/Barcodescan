@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>iOS Web Barcode Scanner — Minimal</title>
-  <!-- Quagga2 (1D + QR support) -->
+  <title>iOS Web Barcode Scanner — Trigger Mode</title>
+  <!-- Quagga2 (1D + QR) -->
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
   <link rel="stylesheet" href="./assets/styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">📷 iOS Web Barcode Scanner</div>
+    <div class="brand">📷 Trigger Scanner (iOS)</div>
     <div class="actions">
       <button id="startBtn" class="btn btn--primary">Start</button>
       <button id="stopBtn" class="btn btn--danger" disabled>Stop</button>
@@ -33,10 +33,10 @@
       <div class="card">
         <h3>Decoding</h3>
         <div class="row">
-          <label><input type="checkbox" id="tryHarder" checked /> Try harder (better localization)</label>
+          <label><input type="checkbox" id="tryHarder" checked /> Try harder</label>
         </div>
         <div class="row">
-          <div class="subtle">Enable readers (1D + 2D):</div>
+          <div class="subtle">Enable readers:</div>
           <div id="readers" class="chips">
             <!-- 1D -->
             <label class="chip"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
@@ -60,10 +60,17 @@
       <div class="video-card">
         <div id="viewport" class="viewport"></div>
         <canvas id="overlay" class="overlay"></canvas>
+
+        <!-- Trigger bar sticks under the video -->
+        <div class="trigger-bar">
+          <button id="triggerBtn" class="btn btn--primary">🎯 Trigger (3s)</button>
+          <span id="armedBadge" class="armed" hidden>ARMED</span>
+          <span id="statusText" class="status muted">Idle</span>
+        </div>
       </div>
 
       <div class="card">
-        <h3>Results</h3>
+        <h3>Scans</h3>
         <div id="results" class="results"></div>
       </div>
 
