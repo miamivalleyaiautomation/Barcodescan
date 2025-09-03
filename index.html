@@ -1,64 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>iOS Web Barcode Scanner (Sample)</title>
-  <!-- Quagga2 library -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>iOS Web Barcode Scanner — Minimal</title>
+  <!-- Quagga2 (1D + QR support) -->
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
-  <link rel="stylesheet" href="./assets/styles.css">
+  <link rel="stylesheet" href="./assets/styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">📦 iOS Barcode Scanner — Sample</div>
-    <div class="right">
+    <div class="brand">📷 iOS Web Barcode Scanner</div>
+    <div class="actions">
       <button id="startBtn" class="btn btn--primary">Start</button>
       <button id="stopBtn" class="btn btn--danger" disabled>Stop</button>
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="left">
+  <main class="layout">
+    <section class="controls">
       <div class="card">
-        <h2>Camera</h2>
-        <div class="row"><label>Device</label><select id="cameraSelect" class="control"></select></div>
-        <div class="row"><label><input type="checkbox" id="envFacing" checked> Prefer back camera</label></div>
+        <h3>Camera</h3>
+        <div class="row">
+          <label>Device</label>
+          <select id="cameraSelect" class="control"></select>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="envFacing" checked /> Prefer back camera</label>
+        </div>
       </div>
 
       <div class="card">
-        <h2>Decoding</h2>
+        <h3>Decoding</h3>
         <div class="row">
-          <label><input type="checkbox" id="tryHarder" checked> Try harder</label>
+          <label><input type="checkbox" id="tryHarder" checked /> Try harder (better localization)</label>
         </div>
         <div class="row">
-          <label>Readers</label>
+          <div class="subtle">Enable readers (1D + 2D):</div>
           <div id="readers" class="chips">
+            <!-- 1D -->
             <label class="chip"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
             <label class="chip"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
             <label class="chip"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
             <label class="chip"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
             <label class="chip"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
+            <label class="chip"><input type="checkbox" value="code_39_reader"> CODE_39</label>
+            <label class="chip"><input type="checkbox" value="i2of5_reader"> ITF</label>
+            <!-- 2D -->
+            <label class="chip"><input type="checkbox" value="qr_reader" checked> QR_CODE</label>
           </div>
         </div>
-        <div class="row"><label><input type="checkbox" id="beep" checked> Beep / haptic on success</label></div>
+        <div class="row">
+          <label><input type="checkbox" id="beep" checked> Beep / haptic on success</label>
+        </div>
       </div>
     </section>
 
-    <section class="right">
+    <section class="viewer">
       <div class="video-card">
         <div id="viewport" class="viewport"></div>
         <canvas id="overlay" class="overlay"></canvas>
       </div>
+
       <div class="card">
-        <h2>Results</h2>
+        <h3>Results</h3>
         <div id="results" class="results"></div>
+      </div>
+
+      <div class="card">
+        <h3>Scans Table</h3>
+        <div class="table-wrap" role="region" aria-label="Scans (swipe to scroll)">
+          <table class="table" id="scanTable">
+            <thead>
+              <tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr>
+            </thead>
+            <tbody id="scanTbody">
+              <tr><td colspan="3" class="muted center">No scans yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="row right">
+          <button id="clearTable" class="btn btn--danger">Clear Table</button>
+        </div>
       </div>
     </section>
   </main>
 
+  <!-- tiny inline beep (base64) -->
   <template id="beepTpl">
-    <audio id="beep" preload="auto">
-      <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA//////////8AAA..." type="audio/mp3">
+    <audio id="beepAudio" preload="auto">
+      <source type="audio/mp3" src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA//////////8AAA"/>
     </audio>
   </template>
 
