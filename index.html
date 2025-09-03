@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>iOS Web Barcode Scanner (Sample)</title>
+  <!-- Quagga2 library -->
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📦 iOS Barcode Scanner — Sample</div>
+    <div class="right">
+      <button id="startBtn" class="btn btn--primary">Start</button>
+      <button id="stopBtn" class="btn btn--danger" disabled>Stop</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="left">
+      <div class="card">
+        <h2>Camera</h2>
+        <div class="row"><label>Device</label><select id="cameraSelect" class="control"></select></div>
+        <div class="row"><label><input type="checkbox" id="envFacing" checked> Prefer back camera</label></div>
+      </div>
+
+      <div class="card">
+        <h2>Decoding</h2>
+        <div class="row">
+          <label><input type="checkbox" id="tryHarder" checked> Try harder</label>
+        </div>
+        <div class="row">
+          <label>Readers</label>
+          <div id="readers" class="chips">
+            <label class="chip"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
+            <label class="chip"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
+            <label class="chip"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
+            <label class="chip"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
+            <label class="chip"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
+          </div>
+        </div>
+        <div class="row"><label><input type="checkbox" id="beep" checked> Beep / haptic on success</label></div>
+      </div>
+    </section>
+
+    <section class="right">
+      <div class="video-card">
+        <div id="viewport" class="viewport"></div>
+        <canvas id="overlay" class="overlay"></canvas>
+      </div>
+      <div class="card">
+        <h2>Results</h2>
+        <div id="results" class="results"></div>
+      </div>
+    </section>
+  </main>
+
+  <template id="beepTpl">
+    <audio id="beep" preload="auto">
+      <source src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA//////////8AAA..." type="audio/mp3">
+    </audio>
+  </template>
+
+  <script src="./assets/app.js"></script>
+</body>
+</html>
