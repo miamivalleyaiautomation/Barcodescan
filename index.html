@@ -5,25 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>ScanSnap • iOS Scanner (1D + 2D)</title>
 
-<!-- 1D: Quagga2 (code128/ean/upc/etc.) -->
+<!-- 1D: Quagga2 -->
 <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
-<!-- 2D: ZXing (QR + Data Matrix) -->
+<!-- 2D: ZXing -->
 <script src="https://unpkg.com/@zxing/library@latest"></script>
 <script src="https://unpkg.com/@zxing/browser@latest"></script>
 
 <style>
-  :root{
-    --bg:#0b1020; --card:#11172b; --text:#e9ecf1; --muted:#aab2c7;
-    --primary:#4fb3ff; --danger:#ff5c7a; --good:#2ecc71; --border:#1f2a45;
-  }
+  :root{--bg:#0b1020;--card:#11172b;--text:#e9ecf1;--muted:#aab2c7;--primary:#4fb3ff;--danger:#ff5c7a;--good:#2ecc71;--border:#1f2a45}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,Inter,Roboto,Arial}
   .top{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f1527;border-bottom:1px solid var(--border)}
   .brand{font-weight:800}
   .btn{border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
-  .btn--p{background:var(--primary);color:#002233}
-  .btn--d{background:var(--danger);color:#330005}
-  .btn--g{background:var(--good);color:#00190c}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .btn--p{background:var(--primary);color:#001c2b} .btn--d{background:var(--danger);color:#2b0007}
   .chip{background:#18223d;padding:6px 10px;border-radius:999px}
   .wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;max-width:1100px;margin:0 auto}
   @media (max-width:900px){.wrap{grid-template-columns:1fr}}
@@ -35,12 +31,11 @@
   .chips{display:flex;flex-wrap:wrap;gap:6px}
   .chip-inp{background:#15223d;padding:6px 8px;border-radius:999px}
   .video-card{background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative}
-  .viewport{width:100%;height:clamp(220px,40vh,420px);display:block}
+  .viewport{width:100%;height:clamp(220px,38vh,420px);display:block}
   .overlay{position:absolute;inset:0;pointer-events:none}
-  .trigger{position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;
-           background:linear-gradient(180deg,transparent,rgba(0,0,0,.55));border-top:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(1.2) blur(6px)}
-  .armed{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;border:1px solid rgba(46,204,113,.4);background:rgba(46,204,113,.15);
-         border-radius:999px;font-weight:700;letter-spacing:.3px;color:var(--good)}
+  .touch-layer{position:absolute;inset:0;cursor:crosshair} /* receives taps */
+  .trigger{position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.55));border-top:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(1.2) blur(6px)}
+  .armed{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;border:1px solid rgba(46,204,113,.4);background:rgba(46,204,113,.15);border-radius:999px;font-weight:700;letter-spacing:.3px;color:var(--good)}
   .badge{background:#15223f;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
   .results{display:grid;gap:6px}
   .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px}
@@ -51,113 +46,110 @@
 </style>
 </head>
 <body>
-  <header class="top">
-    <div class="brand">📷 ScanSnap • iOS Scanner (1D + 2D)</div>
+<header class="top">
+  <div class="brand">📷 ScanSnap • iOS Scanner (1D + 2D)</div>
+  <div class="row">
+    <button id="permBtn" class="btn">Permission</button>
+    <button id="refreshBtn" class="btn">Refresh Cameras</button>
+    <button id="startBtn" class="btn btn--p">Start</button>
+    <button id="stopBtn" class="btn btn--d" disabled>Stop</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <h3>Mode</h3>
     <div class="row">
-      <button id="permBtn" class="btn">Permission</button>
-      <button id="refreshBtn" class="btn">Refresh Cameras</button>
-      <button id="startBtn" class="btn btn--p">Start</button>
-      <button id="stopBtn" class="btn btn--d" disabled>Stop</button>
+      <label class="chip-inp"><input type="radio" name="mode" value="1d" checked> 1D Barcodes</label>
+      <label class="chip-inp"><input type="radio" name="mode" value="2d"> 2D (QR + Data Matrix)</label>
     </div>
-  </header>
 
-  <main class="wrap">
-    <!-- Controls -->
-    <section class="card">
-      <h3>Mode</h3>
-      <div class="row">
-        <label class="chip-inp"><input type="radio" name="mode" value="1d" checked> 1D Barcodes</label>
-        <label class="chip-inp"><input type="radio" name="mode" value="2d"> 2D (QR + Data Matrix)</label>
+    <h3>Camera</h3>
+    <div class="row">
+      <label class="subtle">Device</label>
+      <select id="cameraSelect" class="control"></select>
+      <span class="chip" id="camInfo">No camera selected</span>
+    </div>
+    <div class="row">
+      <label class="chip-inp"><input type="checkbox" id="preferBack" checked> Prefer back camera when unknown</label>
+    </div>
+
+    <h3 style="margin-top:14px;">1D Decoding (Quagga2)</h3>
+    <div class="subtle">Enable readers:</div>
+    <div id="readers1d" class="chips">
+      <label class="chip-inp"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
+      <label class="chip-inp"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
+      <label class="chip-inp"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
+      <label class="chip-inp"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
+      <label class="chip-inp"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
+      <label class="chip-inp"><input type="checkbox" value="code_39_reader"> CODE_39</label>
+      <label class="chip-inp"><input type="checkbox" value="code_93_reader"> CODE_93</label>
+      <label class="chip-inp"><input type="checkbox" value="i2of5_reader"> ITF</label>
+      <label class="chip-inp"><input type="checkbox" value="codabar_reader"> Codabar</label>
+    </div>
+    <div class="row">
+      <label class="chip-inp"><input type="checkbox" id="tryHarder" checked> Try harder</label>
+      <label class="chip-inp"><input type="checkbox" id="beep1d" checked> Beep / haptic</label>
+    </div>
+
+    <h3 style="margin-top:14px;">2D Decoding (ZXing)</h3>
+    <p class="subtle">Restricted to <strong>QR</strong> and <strong>Data Matrix</strong>. Tap video to focus; press <b>Trigger</b> to arm for 3s.</p>
+    <div class="row"><label class="chip-inp"><input type="checkbox" id="beep2d" checked> Beep / haptic</label></div>
+
+    <p class="subtle">Tip: iOS requires HTTPS (Netlify) or localhost (iHost) for camera access.</p>
+  </section>
+
+  <section class="card">
+    <div class="video-card">
+      <!-- 1D target -->
+      <div id="viewport" class="viewport"></div>
+      <!-- 2D stream -->
+      <video id="video2d" class="viewport" playsinline muted style="display:none"></video>
+
+      <!-- overlay + tap-to-focus layer -->
+      <canvas id="overlay" class="overlay"></canvas>
+      <div id="touchLayer" class="touch-layer" aria-label="Tap to focus"></div>
+
+      <!-- controls -->
+      <div class="trigger">
+        <button id="triggerBtn" class="btn btn--p">🎯 Trigger (3s)</button>
+        <span id="armedBadge" class="armed" hidden>ARMED</span>
+        <span id="statusText" class="subtle">Idle</span>
       </div>
+    </div>
 
-      <h3>Camera</h3>
-      <div class="row">
-        <label class="subtle">Device</label>
-        <select id="cameraSelect" class="control"></select>
-        <span class="chip" id="camInfo">No camera selected</span>
+    <div style="display:grid;gap:12px;margin-top:12px;">
+      <div class="card">
+        <h3>Recent Scans</h3>
+        <div id="results" class="results"></div>
       </div>
-      <div class="row">
-        <label class="chip-inp"><input type="checkbox" id="preferBack" checked> Prefer back camera when unknown</label>
-      </div>
-
-      <h3 style="margin-top:14px;">1D Decoding (Quagga2)</h3>
-      <div class="subtle">Enable readers:</div>
-      <div id="readers1d" class="chips">
-        <label class="chip-inp"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
-        <label class="chip-inp"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
-        <label class="chip-inp"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
-        <label class="chip-inp"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
-        <label class="chip-inp"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
-        <label class="chip-inp"><input type="checkbox" value="code_39_reader"> CODE_39</label>
-        <label class="chip-inp"><input type="checkbox" value="code_93_reader"> CODE_93</label>
-        <label class="chip-inp"><input type="checkbox" value="i2of5_reader"> ITF</label>
-        <label class="chip-inp"><input type="checkbox" value="codabar_reader"> Codabar</label>
-      </div>
-      <div class="row">
-        <label class="chip-inp"><input type="checkbox" id="tryHarder" checked> Try harder</label>
-        <label class="chip-inp"><input type="checkbox" id="beep1d" checked> Beep / haptic</label>
-      </div>
-
-      <h3 style="margin-top:14px;">2D Decoding (ZXing)</h3>
-      <p class="subtle">Limited to <strong>QR</strong> and <strong>Data Matrix</strong>. Use <b>Trigger</b> to arm for 3s.</p>
-      <div class="row"><label class="chip-inp"><input type="checkbox" id="beep2d" checked> Beep / haptic</label></div>
-
-      <p class="subtle">Tip: iOS requires HTTPS (Netlify) or localhost (iHost) for camera access.</p>
-    </section>
-
-    <!-- Video + results -->
-    <section class="card">
-      <div class="video-card">
-        <!-- Quagga renders here; ZXing uses the <video> -->
-        <div id="viewport" class="viewport"></div>
-        <video id="video2d" class="viewport" playsinline muted style="display:none"></video>
-        <canvas id="overlay" class="overlay"></canvas>
-
-        <div class="trigger">
-          <button id="triggerBtn" class="btn btn--p">🎯 Trigger (3s)</button>
-          <span id="armedBadge" class="armed" hidden>ARMED</span>
-          <span id="statusText" class="subtle">Idle</span>
+      <div class="card">
+        <h3>Scans Table</h3>
+        <div class="table-wrap" role="region" aria-label="Scans (swipe to scroll)">
+          <table id="scanTable">
+            <thead><tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr></thead>
+            <tbody id="scanBody"><tr><td colspan="3" class="center subtle">No scans yet</td></tr></tbody>
+          </table>
+        </div>
+        <div class="row" style="justify-content:flex-end;margin-top:10px;">
+          <button id="clearBtn" class="btn btn--d">Clear Table</button>
         </div>
       </div>
-
-      <div style="display:grid;gap:12px;margin-top:12px;">
-        <div class="card">
-          <h3>Recent Scans</h3>
-          <div id="results" class="results"></div>
-        </div>
-        <div class="card">
-          <h3>Scans Table</h3>
-          <div class="table-wrap" role="region" aria-label="Scans (swipe to scroll)">
-            <table id="scanTable">
-              <thead><tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr></thead>
-              <tbody id="scanBody"><tr><td colspan="3" class="center subtle">No scans yet</td></tr></tbody>
-            </table>
-          </div>
-          <div class="row" style="justify-content:flex-end;margin-top:10px;">
-            <button id="clearBtn" class="btn btn--d">Clear Table</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- tiny inline beep -->
-  <template id="beepTpl">
-    <audio id="beepAudio" preload="auto">
-      <source type="audio/mp3" src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA//////////8AAA"/>
-    </audio>
-  </template>
+    </div>
+  </section>
+</main>
 
 <script>
 (() => {
   const $=s=>document.querySelector(s);
 
-  // UI
+  // UI refs
   const startBtn=$('#startBtn'), stopBtn=$('#stopBtn'), triggerBtn=$('#triggerBtn');
   const permBtn=$('#permBtn'), refreshBtn=$('#refreshBtn');
   const cameraSel=$('#cameraSelect'), camInfo=$('#camInfo'), preferBack=$('#preferBack');
   const readers1d=$('#readers1d'), tryHarder=$('#tryHarder'), beep1d=$('#beep1d'), beep2d=$('#beep2d');
   const viewport=$('#viewport'), video2d=$('#video2d'), overlay=$('#overlay'), octx=overlay.getContext('2d');
+  const touchLayer=$('#touchLayer');
   const results=$('#results'), tbody=$('#scanBody'), armedBadge=$('#armedBadge'), statusText=$('#statusText');
 
   // Mode
@@ -169,23 +161,166 @@
   // State
   let ARMED=false, armTimer=null, last={code:'',t:0}, DEDUPE=2000;
   let currentDeviceId = localStorage.getItem('scanner.devId') || '';
-  let animRAF=null;
+
+  // Utility: beep + haptic
+  async function beep(){
+    try{
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const o=ctx.createOscillator(); const g=ctx.createGain();
+      o.type='sine'; o.frequency.value=880;
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.15);
+      o.start(); o.stop(ctx.currentTime+0.16);
+      if('vibrate' in navigator) navigator.vibrate(20);
+    }catch{}
+  }
+  function ts(){ const d=new Date(); return d.toLocaleTimeString(); }
+  function isDupe(code){ const now=Date.now(); if(code===last.code && now-last.t<DEDUPE) return true; last={code, t:now}; return false; }
+
+  // Results
+  function onDecode(type, code, doBeep){
+    if(doBeep) beep();
+    const div=document.createElement('div');
+    div.className='badge';
+    div.textContent=`${type}: ${code}`;
+    results.prepend(div);
+    while(results.children.length>6) results.lastChild.remove();
+
+    if(tbody.children.length && tbody.children[0].querySelector('.center')) tbody.innerHTML='';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${type}</td><td>${code}</td><td>${ts()}</td>`;
+    tbody.prepend(tr);
+  }
+  $('#clearBtn').addEventListener('click', ()=>{ tbody.innerHTML='<tr><td colspan="3" class="center subtle">No scans yet</td></tr>'; results.innerHTML=''; });
+
+  // Cameras
+  async function ensurePermission(){
+    try{
+      const tmp=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+      tmp.getTracks().forEach(t=>t.stop());
+    }catch(e){ console.warn('Permission error', e); }
+  }
+  async function listCameras(){
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const vids=devs.filter(d=>d.kind==='videoinput');
+    cameraSel.innerHTML='';
+    vids.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent=d.label || `Camera ${i+1}`;
+      cameraSel.appendChild(o);
+    });
+    if(currentDeviceId && [...cameraSel.options].some(o=>o.value===currentDeviceId)){
+      cameraSel.value=currentDeviceId;
+    }else if(preferBack.checked){
+      const back=[...cameraSel.options].find(o=>/back|rear|environment/i.test(o.textContent));
+      if(back) cameraSel.value=back.value;
+    }
+    currentDeviceId = cameraSel.value || currentDeviceId || '';
+    camInfo.textContent = cameraSel.selectedOptions[0]?.textContent || 'No camera selected';
+    localStorage.setItem('scanner.devId', currentDeviceId || '');
+  }
+  cameraSel.addEventListener('change', async ()=>{ currentDeviceId=cameraSel.value; await restart(); });
+
+  // Constraints builder
+  function buildConstraints(){
+    const id = cameraSel.value || currentDeviceId;
+    if(id){ return { deviceId:{ exact:id }, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} }; }
+    return { facingMode: (preferBack.checked?'environment':'user'), width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} };
+  }
+
+  // Overlay / reticle
+  function sizeOverlay(){
+    const el = (mode==='2d') ? video2d : viewport;
+    overlay.width  = el.offsetWidth || overlay.clientWidth || 0;
+    overlay.height = el.offsetHeight || overlay.clientHeight || 0;
+  }
+  function clearOverlay(){ octx.clearRect(0,0,overlay.width,overlay.height); }
+  function drawReticle(){
+    clearOverlay();
+    const w=overlay.width, h=overlay.height;
+    const rw=w*0.55, rh=h*0.55;
+    const x=(w-rw)/2, y=(h-rh)/2;
+    octx.strokeStyle = ARMED? 'lime' : 'rgba(173,216,230,.9)';
+    octx.lineWidth = 2;
+    octx.strokeRect(x,y,rw,rh);
+  }
+  function drawFocusRing(x,y){
+    octx.save(); octx.strokeStyle='gold'; octx.lineWidth=3;
+    octx.beginPath(); octx.arc(x,y,28,0,Math.PI*2); octx.stroke(); octx.restore();
+    setTimeout(drawReticle, 500);
+  }
+
+  // Tap-to-focus helpers
+  function activeTrack(){
+    try{
+      if(mode==='2d') return (video2d.srcObject && video2d.srcObject.getVideoTracks()[0]) || null;
+      const t = Quagga.CameraAccess?.getActiveTrack?.();
+      if(t) return t;
+      const v = viewport.querySelector('video');
+      return v?.srcObject?.getVideoTracks?.()[0] || null;
+    }catch{ return null; }
+  }
+  async function setContinuousFocus(){
+    const track = activeTrack(); if(!track) return;
+    try{
+      const caps = track.getCapabilities?.() || {};
+      const adv = {};
+      if(caps.focusMode && caps.focusMode.includes('continuous')) adv.focusMode='continuous';
+      if(caps.zoom){ const z=Math.min(caps.zoom.max||1, Math.max(caps.zoom.min||1, 1.4)); adv.zoom=z; }
+      if(Object.keys(adv).length) await track.applyConstraints({ advanced:[adv] });
+    }catch{}
+  }
+  async function tapToFocus(ev){
+    const rect = overlay.getBoundingClientRect();
+    const x = (ev.touches?ev.touches[0].clientX:ev.clientX) - rect.left;
+    const y = (ev.touches?ev.touches[0].clientY:ev.clientY) - rect.top;
+    drawFocusRing(x,y);
+
+    const track = activeTrack(); if(!track) return;
+    try{
+      const caps = track.getCapabilities?.() || {};
+      const nx = Math.min(1, Math.max(0, x / overlay.width));
+      const ny = Math.min(1, Math.max(0, y / overlay.height));
+      const adv = [];
+      if(caps.pointsOfInterest) adv.push({ pointsOfInterest:[{x:nx, y:ny}] });
+      if(caps.focusMode && caps.focusMode.includes('single-shot')) adv.push({ focusMode:'single-shot' });
+      if(adv.length) await track.applyConstraints({ advanced: adv });
+      // revert to continuous focus shortly after
+      setTimeout(setContinuousFocus, 600);
+    }catch{}
+  }
+  touchLayer.addEventListener('click', tapToFocus, {passive:true});
+  touchLayer.addEventListener('touchstart', tapToFocus, {passive:true});
+
+  // Arm / Trigger
+  function setArmed(v){
+    ARMED=v; armedBadge.hidden=!v;
+    statusText.textContent=v?'Armed':'Idle';
+    if(!v && armTimer){ clearTimeout(armTimer); armTimer=null; }
+  }
+  triggerBtn.addEventListener('click', ()=>{
+    setArmed(true);
+    armTimer=setTimeout(()=>setArmed(false), 3000);
+  });
 
   // 1D (Quagga)
   async function start1D(){
     await stop2D();
-    sizeOverlay();
+    sizeOverlay(); drawReticle();
     return new Promise((resolve,reject)=>{
       Quagga.init({
         locate: tryHarder.checked,
         inputStream: { type:'LiveStream', target: viewport, constraints: buildConstraints() },
-        numOfWorkers: 0, locator:{ patchSize:'medium', halfSample:true },
+        numOfWorkers: 0,
+        locator:{ patchSize:'medium', halfSample:true },
         decoder: { readers: get1DReaders() }
-      }, err=>{
+      }, async err=>{
         if(err){ console.error(err); statusText.textContent='Quagga init error'; reject(err); return; }
 
         Quagga.onProcessed(res=>{
-          drawReticle(); // steady reticle even when nothing detected
+          drawReticle();
           if(res?.box){
             octx.strokeStyle = ARMED ? 'lime' : 'deepskyblue';
             octx.lineWidth = 3;
@@ -199,18 +334,21 @@
           const code=res?.codeResult?.code;
           const fmt=(res?.codeResult?.format||'').toUpperCase();
           if(!code || isDupe(code)) return;
-          onDecode(fmt, code, beep1d.checked);
+          onDecode(fmt || '1D', code, beep1d.checked);
         });
 
-        Quagga.start();
-        startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
-        resolve();
+        Quagga.start().then(async ()=>{
+          await setContinuousFocus();
+          startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
+          resolve();
+        }).catch(reject);
       });
     });
   }
   async function stop1D(){
     try{ Quagga.offProcessed(); Quagga.offDetected(); }catch{}
     try{ Quagga.stop(); }catch{}
+    const v = viewport.querySelector('video'); if(v){ try{ v.srcObject?.getTracks?.().forEach(t=>t.stop()); }catch{} }
   }
   function get1DReaders(){ return [...readers1d.querySelectorAll('input:checked')].map(i=>i.value); }
 
@@ -220,14 +358,13 @@
 
   async function start2D(){
     await stop1D();
-    updatePreviewVisibility();
-    // explicit stream for iOS autoplay
+    video2d.style.display='block'; viewport.style.display='none';
     stream2d = await navigator.mediaDevices.getUserMedia({ video: buildConstraints(), audio:false });
     video2d.srcObject = stream2d; video2d.setAttribute('playsinline',''); video2d.muted=true;
     await video2d.play().catch(()=>{});
-    sizeOverlay();
+    await setContinuousFocus();
+    sizeOverlay(); drawReticle();
 
-    // continuous reticle while playing
     cancelAnimationFrame(raf2d);
     const loop=()=>{ drawReticle(); raf2d=requestAnimationFrame(loop); }; loop();
 
@@ -257,121 +394,25 @@
   async function stop2D(){
     try{ reader2d?.reset?.(); }catch{}
     try{ if(stream2d){ stream2d.getTracks().forEach(t=>t.stop()); stream2d=null; } }catch{}
-    cancelAnimationFrame(raf2d); video2d.srcObject=null; updatePreviewVisibility(); clearOverlay();
+    cancelAnimationFrame(raf2d); video2d.srcObject=null; video2d.style.display='none'; viewport.style.display='block'; clearOverlay();
   }
 
-  // Shared start/stop/restart
-  async function start(){ if(mode==='2d') await start2D(); else await start1D(); }
+  // Start/Stop/Restart
+  async function start(){
+    if(mode==='2d') await start2D(); else await start1D();
+  }
   async function stop(){ await stop1D(); await stop2D(); startBtn.disabled=false; stopBtn.disabled=true; setArmed(false); statusText.textContent='Stopped'; }
-  async function restart(){ if(!startBtn.disabled) { updatePreviewVisibility(); return; } await start(); }
+  async function restart(){ await stop(); await start(); }
 
-  // Cameras
-  function buildConstraints(){
-    const id = cameraSel.value || currentDeviceId;
-    if(id){ return { deviceId:{ exact:id }, width:{ideal:1280}, height:{ideal:720} }; }
-    return { facingMode: (preferBack.checked?'environment':'user'), width:{ideal:1280}, height:{ideal:720} };
-  }
-  async function ensurePermission(){
-    try{
-      const tmp=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-      tmp.getTracks().forEach(t=>t.stop());
-    }catch(e){ console.warn('Permission error', e); }
-  }
-  async function listCameras(){
-    const devs=await navigator.mediaDevices.enumerateDevices();
-    const vids=devs.filter(d=>d.kind==='videoinput');
-    cameraSel.innerHTML='';
-    vids.forEach((d,i)=>{
-      const o=document.createElement('option');
-      o.value=d.deviceId;
-      o.textContent=d.label || `Camera ${i+1}`;
-      cameraSel.appendChild(o);
-    });
-    // Try to keep selection stable
-    if(currentDeviceId && [...cameraSel.options].some(o=>o.value===currentDeviceId)){
-      cameraSel.value=currentDeviceId;
-    }else if(preferBack.checked){
-      const back=[...cameraSel.options].find(o=>/back|rear|environment/i.test(o.textContent));
-      if(back) cameraSel.value=back.value;
-    }
-    currentDeviceId = cameraSel.value || currentDeviceId || '';
-    camInfo.textContent = cameraSel.selectedOptions[0]?.textContent || 'No camera selected';
-    localStorage.setItem('scanner.devId', currentDeviceId || '');
-  }
-
-  // Reticle / overlay
-  function sizeOverlay(){
-    const el = (mode==='2d') ? video2d : viewport;
-    overlay.width  = el.offsetWidth || overlay.clientWidth;
-    overlay.height = el.offsetHeight || overlay.clientHeight;
-  }
-  function clearOverlay(){ octx.clearRect(0,0,overlay.width,overlay.height); }
-  function drawReticle(){
-    clearOverlay();
-    const w=overlay.width, h=overlay.height;
-    const rw=w*0.55, rh=h*0.55;
-    const x=(w-rw)/2, y=(h-rh)/2;
-    octx.strokeStyle = ARMED? 'lime' : 'rgba(173,216,230,.9)';
-    octx.lineWidth = 2;
-    octx.strokeRect(x,y,rw,rh);
-  }
-
-  // Decode handlers
-  function onDecode(fmt, code, doBeep){
-    addBadge(fmt, code); addRow(fmt, code); beep(doBeep);
-    clearTimeout(armTimer); setArmed(false);
-  }
-  function addBadge(fmt, code){ const el=document.createElement('div'); el.className='badge'; el.textContent=`${fmt}: ${code}`; results.prepend(el); }
-  function addRow(fmt,code){
-    if(tbody.firstElementChild && tbody.firstElementChild.children.length===1) tbody.innerHTML='';
-    const tr=document.createElement('tr'); const t1=document.createElement('td'); const t2=document.createElement('td'); const t3=document.createElement('td');
-    t1.textContent=fmt; t2.textContent=code; t3.textContent=new Date().toLocaleTimeString();
-    tr.append(t1,t2,t3); tbody.prepend(tr);
-  }
-  function beep(on){
-    if(!on) return;
-    if('vibrate' in navigator) try{ navigator.vibrate(20); }catch{}
-    let a=document.getElementById('beepAudio');
-    if(!a){ const f=document.getElementById('beepTpl').content.cloneNode(true); document.body.appendChild(f); a=document.getElementById('beepAudio'); }
-    a.play().catch(()=>{});
-  }
-  function isDupe(code){ const now=Date.now(); if(code===last.code && (now-last.t)<DEDUPE) return true; last={code,t:now}; return false; }
-  function setArmed(on){ ARMED=!!on; armedBadge.hidden=!ARMED; statusText.textContent=ARMED?'Armed (3s)…':'Idle'; triggerBtn.disabled=ARMED; }
-  function arm(ms=3000){ clearTimeout(armTimer); setArmed(true); armTimer=setTimeout(()=>setArmed(false),ms); }
-
-  // Preview visibility per mode
-  function updatePreviewVisibility(){
-    if(mode==='2d'){ video2d.style.display=''; viewport.style.display='none'; }
-    else { video2d.style.display='none'; viewport.style.display=''; }
-    sizeOverlay(); drawReticle();
-  }
-
-  // Events
+  // Buttons
   startBtn.addEventListener('click', start);
   stopBtn.addEventListener('click', stop);
-  triggerBtn.addEventListener('click', ()=>arm(3000));
-  $('#clearBtn').addEventListener('click', ()=>{ tbody.innerHTML='<tr><td colspan="3" class="center subtle">No scans yet</td></tr>'; results.innerHTML=''; });
+  permBtn.addEventListener('click', ensurePermission);
+  refreshBtn.addEventListener('click', async ()=>{ await listCameras(); });
 
-  cameraSel.addEventListener('change', async ()=>{
-    currentDeviceId = cameraSel.value; localStorage.setItem('scanner.devId', currentDeviceId||'');
-    camInfo.textContent = cameraSel.selectedOptions[0]?.textContent || 'No camera selected';
-    if(!startBtn.disabled) return; // not running
-    await restart();
-  });
-  preferBack.addEventListener('change', async ()=>{ if(startBtn.disabled) await restart(); });
-  readers1d.addEventListener('change', async ()=>{ if(startBtn.disabled && mode==='1d') await start1D(); });
-  tryHarder.addEventListener('change', async ()=>{ if(startBtn.disabled && mode==='1d') await start1D(); });
-  permBtn.addEventListener('click', async ()=>{ await ensurePermission(); await listCameras(); });
-  refreshBtn.addEventListener('click', async ()=>{ await listCameras(); if(startBtn.disabled) await restart(); });
-
-  window.addEventListener('resize', sizeOverlay);
-
-  // Boot: get permission (labels), list cameras, show reticle
-  (async () => {
-    await ensurePermission();
-    await listCameras();
-    updatePreviewVisibility();
-  })();
+  // Init
+  window.addEventListener('resize', ()=>{ sizeOverlay(); drawReticle(); });
+  (async ()=>{ try{ await ensurePermission(); await listCameras(); sizeOverlay(); drawReticle(); }catch(e){} })();
 })();
 </script>
 </body>
