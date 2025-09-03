@@ -2,66 +2,136 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>iOS Web Barcode Scanner — Trigger Mode</title>
-  <!-- Quagga2 (1D + QR) -->
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Trigger Scanner (iOS • 1D + QR)</title>
+
+  <!-- Quagga2: robust in-browser barcode/QR decoder -->
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
-  <link rel="stylesheet" href="./assets/styles.css" />
+
+  <style>
+    :root{
+      --bg:#0b1020; --card:#11172b; --text:#e9ecf1; --muted:#aab2c7;
+      --primary:#4fb3ff; --danger:#ff5c7a; --border:#1f2a45; --good:#2ecc71;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,system-ui,Inter,Roboto,Arial;background:var(--bg);color:var(--text)}
+    .topbar{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:12px 16px;background:#0f1527;border-bottom:1px solid var(--border)
+    }
+    .brand{font-weight:800}
+    .btn{border:none;padding:10px 14px;border-radius:10px;cursor:pointer}
+    .btn--primary{background:var(--primary);color:#001222}
+    .btn--danger{background:var(--danger);color:#160003}
+
+    /* Layout: compact, responsive */
+    .wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;max-width:1100px;margin:0 auto}
+    @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
+    .card{
+      background:var(--card);border:1px solid var(--border);border-radius:12px;
+      padding:12px;box-shadow:0 12px 30px rgba(0,0,0,.25)
+    }
+    h3{margin:6px 0 10px 0}
+    .row{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{background:#1a223a;padding:6px 8px;border-radius:999px}
+    .control{
+      width:auto;min-width:160px;background:#0d1429;color:var(--text);padding:8px 10px;
+      border-radius:10px;border:1px solid var(--border)
+    }
+    .subtle{color:var(--muted);font-size:14px}
+
+    /* Camera area — compact & responsive */
+    .video-card{
+      background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);
+      position:relative
+    }
+    /* Smaller camera window: height scales with viewport but stays modest */
+    .viewport{width:100%;height:clamp(220px, 40vh, 420px)}
+    .overlay{position:absolute;inset:0;pointer-events:none}
+
+    /* Trigger bar sits over bottom of video, readable but compact */
+    .trigger-bar{
+      position:absolute;left:0;right:0;bottom:0;
+      display:flex;gap:10px;align-items:center;justify-content:center;
+      padding:10px;
+      background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.55));
+      backdrop-filter:saturate(1.2) blur(6px);
+      border-top:1px solid rgba(255,255,255,.08)
+    }
+    .armed{
+      display:inline-flex;align-items:center;justify-content:center;
+      padding:6px 10px;border-radius:999px;border:1px solid rgba(46,204,113,.4);
+      background:rgba(46,204,113,.15);color:var(--good);font-weight:700;letter-spacing:.3px
+    }
+    .status{font-size:13px}
+    .muted{color:var(--muted)}
+
+    .results{display:grid;gap:6px}
+    .badge{background:#15223f;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+
+    .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px}
+    .table{width:100%;border-collapse:collapse;background:#0d1429}
+    .table th,.table td{border-bottom:1px solid var(--border);padding:10px 12px;white-space:nowrap}
+    .table thead th{position:sticky;top:0;background:#0f1527;text-align:left;font-size:12px;color:var(--muted)}
+    .center{text-align:center}
+  </style>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">📷 Trigger Scanner (iOS)</div>
+    <div class="brand">📷 Trigger Scanner (iOS • 1D + QR)</div>
     <div class="actions">
       <button id="startBtn" class="btn btn--primary">Start</button>
-      <button id="stopBtn" class="btn btn--danger" disabled>Stop</button>
+      <button id="stopBtn"  class="btn btn--danger"  disabled>Stop</button>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="controls">
-      <div class="card">
-        <h3>Camera</h3>
-        <div class="row">
-          <label>Device</label>
-          <select id="cameraSelect" class="control"></select>
-        </div>
-        <div class="row">
-          <label><input type="checkbox" id="envFacing" checked /> Prefer back camera</label>
-        </div>
+  <main class="wrap">
+    <!-- Controls -->
+    <section class="card">
+      <h3>Camera</h3>
+      <div class="row">
+        <label>Device</label>
+        <select id="cameraSelect" class="control"></select>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="envFacing" checked> Prefer back camera</label>
       </div>
 
-      <div class="card">
-        <h3>Decoding</h3>
-        <div class="row">
-          <label><input type="checkbox" id="tryHarder" checked /> Try harder</label>
-        </div>
-        <div class="row">
-          <div class="subtle">Enable readers:</div>
-          <div id="readers" class="chips">
-            <!-- 1D -->
-            <label class="chip"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
-            <label class="chip"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
-            <label class="chip"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
-            <label class="chip"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
-            <label class="chip"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
-            <label class="chip"><input type="checkbox" value="code_39_reader"> CODE_39</label>
-            <label class="chip"><input type="checkbox" value="i2of5_reader"> ITF</label>
-            <!-- 2D -->
-            <label class="chip"><input type="checkbox" value="qr_reader" checked> QR_CODE</label>
-          </div>
-        </div>
-        <div class="row">
-          <label><input type="checkbox" id="beep" checked> Beep / haptic on success</label>
+      <h3 style="margin-top:14px;">Decoding</h3>
+      <div class="row">
+        <label><input type="checkbox" id="tryHarder" checked> Try harder (better localization)</label>
+      </div>
+      <div class="row">
+        <div class="subtle">Enable readers (1D + 2D):</div>
+        <div id="readers" class="chips">
+          <!-- 1D -->
+          <label class="chip"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
+          <label class="chip"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
+          <label class="chip"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
+          <label class="chip"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
+          <label class="chip"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
+          <label class="chip"><input type="checkbox" value="code_39_reader"> CODE_39</label>
+          <label class="chip"><input type="checkbox" value="i2of5_reader"> ITF</label>
+          <!-- 2D -->
+          <label class="chip"><input type="checkbox" value="qr_reader" checked> QR_CODE</label>
         </div>
       </div>
+      <div class="row">
+        <label><input type="checkbox" id="beep" checked> Beep / haptic on success</label>
+      </div>
+      <p class="subtle">Tip: On iOS, camera access requires HTTPS (Netlify) or localhost (iHost).</p>
     </section>
 
-    <section class="viewer">
+    <!-- Viewer + results -->
+    <section class="card">
       <div class="video-card">
         <div id="viewport" class="viewport"></div>
         <canvas id="overlay" class="overlay"></canvas>
 
-        <!-- Trigger bar sticks under the video -->
         <div class="trigger-bar">
           <button id="triggerBtn" class="btn btn--primary">🎯 Trigger (3s)</button>
           <span id="armedBadge" class="armed" hidden>ARMED</span>
@@ -69,25 +139,27 @@
         </div>
       </div>
 
-      <div class="card">
-        <h3>Scans</h3>
-        <div id="results" class="results"></div>
-      </div>
-
-      <div class="card">
-        <h3>Scans Table</h3>
-        <div class="table-wrap" role="region" aria-label="Scans (swipe to scroll)">
-          <table class="table" id="scanTable">
-            <thead>
-              <tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr>
-            </thead>
-            <tbody id="scanTbody">
-              <tr><td colspan="3" class="muted center">No scans yet</td></tr>
-            </tbody>
-          </table>
+      <div style="display:grid; gap:12px; margin-top:12px;">
+        <div class="card">
+          <h3>Recent Scans</h3>
+          <div id="results" class="results"></div>
         </div>
-        <div class="row right">
-          <button id="clearTable" class="btn btn--danger">Clear Table</button>
+
+        <div class="card">
+          <h3>Scans Table</h3>
+          <div class="table-wrap" role="region" aria-label="Scans (swipe to scroll)">
+            <table class="table" id="scanTable">
+              <thead>
+                <tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr>
+              </thead>
+              <tbody id="scanTbody">
+                <tr><td colspan="3" class="center muted">No scans yet</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="row" style="justify-content:flex-end; margin-top:10px;">
+            <button id="clearTable" class="btn btn--danger">Clear Table</button>
+          </div>
         </div>
       </div>
     </section>
@@ -100,6 +172,215 @@
     </audio>
   </template>
 
-  <script src="./assets/app.js"></script>
+  <script>
+    // Trigger-based iOS-friendly Quagga2 scanner (1D + QR)
+    const $ = s => document.querySelector(s);
+
+    // UI refs
+    const startBtn   = $('#startBtn');
+    const stopBtn    = $('#stopBtn');
+    const triggerBtn = $('#triggerBtn');
+    const armedBadge = $('#armedBadge');
+    const statusText = $('#statusText');
+    const cameraSel  = $('#cameraSelect');
+    const envFacing  = $('#envFacing');
+    const tryHarder  = $('#tryHarder');
+    const readersWrap= $('#readers');
+    const beepChk    = $('#beep');
+
+    const viewport   = $('#viewport');
+    const overlay    = $('#overlay');
+    const octx       = overlay.getContext('2d');
+
+    const results    = $('#results');
+    const tbody      = $('#scanTbody');
+    const clearBtn   = $('#clearTable');
+
+    // state
+    let ARMED = false;
+    let armTimer = null;
+    let last = { code:'', t:0 };
+    const DEDUPE_MS = 2000;
+
+    // --- helpers ---
+    function resizeOverlay() {
+      overlay.width  = viewport.offsetWidth;
+      overlay.height = viewport.offsetHeight;
+    }
+
+    function dupe(code) {
+      const now = Date.now();
+      if (code === last.code && now - last.t < DEDUPE_MS) return true;
+      last = { code, t: now }; return false;
+    }
+
+    function beep() {
+      if ('vibrate' in navigator) navigator.vibrate(20);
+      let a = document.getElementById('beepAudio');
+      if (!a) {
+        const frag = document.getElementById('beepTpl').content.cloneNode(true);
+        document.body.appendChild(frag);
+        a = document.getElementById('beepAudio');
+      }
+      a.play().catch(()=>{});
+    }
+
+    function getReaders() {
+      return Array.from(readersWrap.querySelectorAll('input:checked')).map(i => i.value);
+    }
+
+    function addBadge(fmt, code) {
+      const el = document.createElement('div');
+      el.className = 'badge';
+      el.textContent = `${fmt}: ${code}`;
+      results.prepend(el);
+    }
+
+    function addRow(fmt, code) {
+      const first = tbody.firstElementChild;
+      if (first && first.children.length === 1) tbody.removeChild(first);
+      const tr = document.createElement('tr');
+      const tdT = document.createElement('td');
+      const tdC = document.createElement('td');
+      const tdD = document.createElement('td');
+      tdT.textContent = fmt || 'UNKNOWN';
+      tdC.textContent = code || '';
+      tdD.textContent = new Date().toLocaleTimeString();
+      tr.appendChild(tdT); tr.appendChild(tdC); tr.appendChild(tdD);
+      tbody.prepend(tr);
+    }
+
+    function setArmed(on) {
+      ARMED = !!on;
+      armedBadge.hidden = !ARMED;
+      statusText.textContent = ARMED ? 'Armed (waiting for code)…' : 'Idle';
+      triggerBtn.disabled = ARMED; // prevent double-arming
+    }
+
+    function buildConstraints() {
+      // If a deviceId is selected, prefer it; otherwise use facingMode
+      const id = cameraSel && cameraSel.value;
+      if (id) {
+        return { deviceId: { exact: id }, width: { ideal: 1280 }, height: { ideal: 720 } };
+      }
+      return {
+        facingMode: envFacing.checked ? "environment" : "user",
+        width: { ideal: 1280 }, height: { ideal: 720 }
+      };
+    }
+
+    function buildConfig() {
+      return {
+        locate: tryHarder.checked,
+        inputStream: {
+          type: "LiveStream",
+          target: viewport,
+          constraints: buildConstraints()
+        },
+        // iOS-friendly: avoid web workers with camera stream
+        numOfWorkers: 0,
+        locator: { patchSize: "medium", halfSample: true },
+        decoder: { readers: getReaders() }
+      };
+    }
+
+    function armFor(ms = 3000) {
+      clearTimeout(armTimer);
+      setArmed(true);
+      armTimer = setTimeout(() => setArmed(false), ms);
+    }
+
+    // --- lifecycle ---
+    async function start() {
+      if (Quagga.initialized) await stop();
+      resizeOverlay();
+      const cfg = buildConfig();
+
+      return new Promise((resolve, reject) => {
+        Quagga.init(cfg, err => {
+          if (err) { console.error(err); statusText.textContent = 'Init error'; reject(err); return; }
+          Quagga.initialized = true;
+
+          Quagga.onProcessed(res => {
+            octx.clearRect(0,0,overlay.width,overlay.height);
+            if (res?.box) {
+              octx.strokeStyle = ARMED ? "lime" : "rgba(173,216,230,.85)";
+              octx.lineWidth = 3;
+              octx.beginPath();
+              res.box.forEach((p,i)=> i?octx.lineTo(p.x,p.y):octx.moveTo(p.x,p.y));
+              octx.closePath(); octx.stroke();
+            }
+          });
+
+          Quagga.onDetected(res => {
+            if (!ARMED) return; // ignore until triggered
+            const code = res?.codeResult?.code;
+            const fmt  = (res?.codeResult?.format || '').toUpperCase();
+            if (!code || dupe(code)) return;
+            addBadge(fmt, code);
+            addRow(fmt, code);
+            if (beepChk?.checked) beep();
+            clearTimeout(armTimer);
+            setArmed(false);
+          });
+
+          Quagga.start();
+          startBtn.disabled = true;
+          stopBtn.disabled  = false;
+          setArmed(false);
+          statusText.textContent = 'Ready';
+          resolve();
+        });
+      });
+    }
+
+    async function stop() {
+      try {
+        Quagga.offProcessed();
+        Quagga.offDetected();
+      } catch {}
+      try { Quagga.stop(); } catch {}
+      Quagga.initialized = false;
+      startBtn.disabled = false;
+      stopBtn.disabled  = true;
+      setArmed(false);
+      statusText.textContent = 'Stopped';
+    }
+
+    // --- device listing ---
+    async function listCameras() {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const vids = devs.filter(d => d.kind === 'videoinput');
+        cameraSel.innerHTML = '';
+        vids.forEach((d,i) => {
+          const o = document.createElement('option');
+          o.value = d.deviceId;
+          o.textContent = d.label || `Camera ${i+1}`;
+          cameraSel.appendChild(o);
+        });
+      } catch (e) {
+        // May not have permission yet; ignore
+      }
+    }
+
+    // --- events ---
+    startBtn.addEventListener('click', start);
+    stopBtn .addEventListener('click', stop);
+    triggerBtn.addEventListener('click', () => armFor(3000));
+    clearBtn.addEventListener('click', () => {
+      tbody.innerHTML = '<tr><td colspan="3" class="center muted">No scans yet</td></tr>';
+      results.innerHTML = '';
+    });
+    envFacing.addEventListener('change', async () => { if (Quagga.initialized) await start(); });
+    readersWrap.addEventListener('change', async () => { if (Quagga.initialized) await start(); });
+    cameraSel .addEventListener('change', async () => { if (Quagga.initialized) await start(); });
+
+    // populate cameras (labels appear after first permission grant)
+    (async () => { try { await listCameras(); } catch {} })();
+
+    // keep overlay in sync on rotation/resize
+    addEventListener('resize', () => { if (Quagga.initialized) resizeOverlay(); });
+  </script>
 </body>
 </html>
