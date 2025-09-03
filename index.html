@@ -1,69 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
-  <title>iOS Scanner • 1D (Quagga2) + 2D (ZXing)</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>ScanSnap • iOS Scanner (1D + 2D)</title>
 
-  <!-- 1D: Quagga2 -->
-  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
-  <!-- 2D: ZXing (QR + DataMatrix). We include both to handle global naming differences -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
-  <script src="https://unpkg.com/@zxing/browser@latest"></script>
+<!-- 1D: Quagga2 (code128/ean/upc/etc.) -->
+<script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.js"></script>
+<!-- 2D: ZXing (QR + Data Matrix) -->
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://unpkg.com/@zxing/browser@latest"></script>
 
-  <style>
-    :root{
-      --bg:#0b1020; --card:#11172b; --text:#e9ecf1; --muted:#aab2c7;
-      --primary:#4fb3ff; --danger:#ff5c7a; --border:#1f2a45; --good:#2ecc71;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:-apple-system,system-ui,Inter,Roboto,Arial;background:var(--bg);color:var(--text)}
-    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#0f1527;border-bottom:1px solid var(--border)}
-    .brand{font-weight:800}
-    .btn{border:none;padding:10px 14px;border-radius:10px;cursor:pointer}
-    .btn--primary{background:var(--primary);color:#001222}
-    .btn--danger{background:var(--danger);color:#160003}
-
-    .wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;max-width:1100px;margin:0 auto}
-    @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
-    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
-    h3{margin:6px 0 10px 0}
-    .row{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
-    .chips{display:flex;flex-wrap:wrap;gap:6px}
-    .chip{background:#1a223a;padding:6px 8px;border-radius:999px}
-    .control{width:auto;min-width:160px;background:#0d1429;color:var(--text);padding:8px 10px;border-radius:10px;border:1px solid var(--border)}
-    .subtle{color:var(--muted);font-size:14px}
-
-    .video-card{background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative}
-    .viewport{width:100%;height:clamp(220px, 40vh, 420px)}
-    .overlay{position:absolute;inset:0;pointer-events:none}
-
-    .trigger-bar{
-      position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;
-      background:linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.55));backdrop-filter:saturate(1.2) blur(6px);border-top:1px solid rgba(255,255,255,.08)
-    }
-    .armed{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;border-radius:999px;border:1px solid rgba(46,204,113,.4);background:rgba(46,204,113,.15);color:var(--good);font-weight:700;letter-spacing:.3px}
-    .status{font-size:13px}
-    .muted{color:var(--muted)}
-    .results{display:grid;gap:6px}
-    .badge{background:#15223f;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-
-    .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px}
-    .table{width:100%;border-collapse:collapse;background:#0d1429}
-    .table th,.table td{border-bottom:1px solid var(--border);padding:10px 12px;white-space:nowrap}
-    .table thead th{position:sticky;top:0;background:#0f1527;text-align:left;font-size:12px;color:var(--muted)}
-    .center{text-align:center}
-  </style>
+<style>
+  :root{
+    --bg:#0b1020; --card:#11172b; --text:#e9ecf1; --muted:#aab2c7;
+    --primary:#4fb3ff; --danger:#ff5c7a; --good:#2ecc71; --border:#1f2a45;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,Inter,Roboto,Arial}
+  .top{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px;background:#0f1527;border-bottom:1px solid var(--border)}
+  .brand{font-weight:800}
+  .btn{border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
+  .btn--p{background:var(--primary);color:#002233}
+  .btn--d{background:var(--danger);color:#330005}
+  .btn--g{background:var(--good);color:#00190c}
+  .chip{background:#18223d;padding:6px 10px;border-radius:999px}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;max-width:1100px;margin:0 auto}
+  @media (max-width:900px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 12px 30px rgba(0,0,0,.25)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0}
+  h3{margin:6px 0 10px}
+  .control{background:#0d1429;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;min-width:160px}
+  .subtle{color:var(--muted);font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip-inp{background:#15223d;padding:6px 8px;border-radius:999px}
+  .video-card{background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative}
+  .viewport{width:100%;height:clamp(220px,40vh,420px);display:block}
+  .overlay{position:absolute;inset:0;pointer-events:none}
+  .trigger{position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;
+           background:linear-gradient(180deg,transparent,rgba(0,0,0,.55));border-top:1px solid rgba(255,255,255,.08);backdrop-filter:saturate(1.2) blur(6px)}
+  .armed{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;border:1px solid rgba(46,204,113,.4);background:rgba(46,204,113,.15);
+         border-radius:999px;font-weight:700;letter-spacing:.3px;color:var(--good)}
+  .badge{background:#15223f;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+  .results{display:grid;gap:6px}
+  .table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px}
+  table{width:100%;border-collapse:collapse;background:#0d1429}
+  th,td{border-bottom:1px solid var(--border);padding:10px 12px;white-space:nowrap}
+  thead th{position:sticky;top:0;background:#0f1527;text-align:left;font-size:12px;color:var(--muted)}
+  .center{text-align:center}
+</style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">📷 iOS Scanner • 1D (Quagga2) + 2D (ZXing)</div>
-    <div class="actions">
-      <button id="startBtn" class="btn btn--primary">Start</button>
-      <button id="stopBtn"  class="btn btn--danger"  disabled>Stop</button>
+  <header class="top">
+    <div class="brand">📷 ScanSnap • iOS Scanner (1D + 2D)</div>
+    <div class="row">
+      <button id="permBtn" class="btn">Permission</button>
+      <button id="refreshBtn" class="btn">Refresh Cameras</button>
+      <button id="startBtn" class="btn btn--p">Start</button>
+      <button id="stopBtn" class="btn btn--d" disabled>Stop</button>
     </div>
   </header>
 
@@ -72,310 +66,313 @@
     <section class="card">
       <h3>Mode</h3>
       <div class="row">
-        <label class="chip"><input type="radio" name="mode" value="1d" checked> 1D Barcodes</label>
-        <label class="chip"><input type="radio" name="mode" value="2d"> 2D (QR + Data Matrix)</label>
+        <label class="chip-inp"><input type="radio" name="mode" value="1d" checked> 1D Barcodes</label>
+        <label class="chip-inp"><input type="radio" name="mode" value="2d"> 2D (QR + Data Matrix)</label>
       </div>
 
       <h3>Camera</h3>
       <div class="row">
-        <label>Device</label>
+        <label class="subtle">Device</label>
         <select id="cameraSelect" class="control"></select>
+        <span class="chip" id="camInfo">No camera selected</span>
       </div>
       <div class="row">
-        <label><input type="checkbox" id="envFacing" checked> Prefer back camera</label>
+        <label class="chip-inp"><input type="checkbox" id="preferBack" checked> Prefer back camera when unknown</label>
       </div>
 
       <h3 style="margin-top:14px;">1D Decoding (Quagga2)</h3>
-      <div id="readers1dWrap">
-        <div class="row"><div class="subtle">Enable 1D readers:</div></div>
-        <div id="readers1d" class="chips">
-          <label class="chip"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
-          <label class="chip"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
-          <label class="chip"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
-          <label class="chip"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
-          <label class="chip"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
-          <label class="chip"><input type="checkbox" value="code_39_reader"> CODE_39</label>
-          <label class="chip"><input type="checkbox" value="code_93_reader"> CODE_93</label>
-          <label class="chip"><input type="checkbox" value="i2of5_reader"> ITF</label>
-          <label class="chip"><input type="checkbox" value="codabar_reader"> Codabar</label>
-        </div>
-        <div class="row">
-          <label><input type="checkbox" id="tryHarder" checked> Try harder</label>
-          <label><input type="checkbox" id="beep1d" checked> Beep / haptic on success</label>
-        </div>
+      <div class="subtle">Enable readers:</div>
+      <div id="readers1d" class="chips">
+        <label class="chip-inp"><input type="checkbox" value="code_128_reader" checked> CODE_128</label>
+        <label class="chip-inp"><input type="checkbox" value="ean_reader" checked> EAN-13</label>
+        <label class="chip-inp"><input type="checkbox" value="ean_8_reader" checked> EAN-8</label>
+        <label class="chip-inp"><input type="checkbox" value="upc_reader" checked> UPC-A</label>
+        <label class="chip-inp"><input type="checkbox" value="upc_e_reader" checked> UPC-E</label>
+        <label class="chip-inp"><input type="checkbox" value="code_39_reader"> CODE_39</label>
+        <label class="chip-inp"><input type="checkbox" value="code_93_reader"> CODE_93</label>
+        <label class="chip-inp"><input type="checkbox" value="i2of5_reader"> ITF</label>
+        <label class="chip-inp"><input type="checkbox" value="codabar_reader"> Codabar</label>
+      </div>
+      <div class="row">
+        <label class="chip-inp"><input type="checkbox" id="tryHarder" checked> Try harder</label>
+        <label class="chip-inp"><input type="checkbox" id="beep1d" checked> Beep / haptic</label>
       </div>
 
       <h3 style="margin-top:14px;">2D Decoding (ZXing)</h3>
-      <div id="readers2dWrap">
-        <p class="subtle">ZXing MultiFormat reader restricted to <strong>QR</strong> and <strong>Data Matrix</strong>.</p>
-        <div class="row"><label><input type="checkbox" id="beep2d" checked> Beep / haptic on success</label></div>
-      </div>
+      <p class="subtle">Limited to <strong>QR</strong> and <strong>Data Matrix</strong>. Use <b>Trigger</b> to arm for 3s.</p>
+      <div class="row"><label class="chip-inp"><input type="checkbox" id="beep2d" checked> Beep / haptic</label></div>
 
       <p class="subtle">Tip: iOS requires HTTPS (Netlify) or localhost (iHost) for camera access.</p>
     </section>
 
-    <!-- Viewer + results -->
+    <!-- Video + results -->
     <section class="card">
       <div class="video-card">
-        <!-- 1D uses this container; 2D uses <video> directly -->
+        <!-- Quagga renders here; ZXing uses the <video> -->
         <div id="viewport" class="viewport"></div>
         <video id="video2d" class="viewport" playsinline muted style="display:none"></video>
         <canvas id="overlay" class="overlay"></canvas>
 
-        <div class="trigger-bar">
-          <button id="triggerBtn" class="btn btn--primary">🎯 Trigger (3s)</button>
+        <div class="trigger">
+          <button id="triggerBtn" class="btn btn--p">🎯 Trigger (3s)</button>
           <span id="armedBadge" class="armed" hidden>ARMED</span>
-          <span id="statusText" class="status muted">Idle</span>
+          <span id="statusText" class="subtle">Idle</span>
         </div>
       </div>
 
-      <div style="display:grid; gap:12px; margin-top:12px;">
+      <div style="display:grid;gap:12px;margin-top:12px;">
         <div class="card">
           <h3>Recent Scans</h3>
           <div id="results" class="results"></div>
         </div>
-
         <div class="card">
           <h3>Scans Table</h3>
           <div class="table-wrap" role="region" aria-label="Scans (swipe to scroll)">
-            <table class="table" id="scanTable">
-              <thead>
-                <tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr>
-              </thead>
-              <tbody id="scanTbody">
-                <tr><td colspan="3" class="center muted">No scans yet</td></tr>
-              </tbody>
+            <table id="scanTable">
+              <thead><tr><th style="width:150px">Type</th><th>Code</th><th style="width:90px">Time</th></tr></thead>
+              <tbody id="scanBody"><tr><td colspan="3" class="center subtle">No scans yet</td></tr></tbody>
             </table>
           </div>
-          <div class="row" style="justify-content:flex-end; margin-top:10px;">
-            <button id="clearTable" class="btn btn--danger">Clear Table</button>
+          <div class="row" style="justify-content:flex-end;margin-top:10px;">
+            <button id="clearBtn" class="btn btn--d">Clear Table</button>
           </div>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- tiny inline beep (base64) -->
+  <!-- tiny inline beep -->
   <template id="beepTpl">
     <audio id="beepAudio" preload="auto">
       <source type="audio/mp3" src="data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAACcQCA//////////8AAA"/>
     </audio>
   </template>
 
-  <script>
-    const $ = s => document.querySelector(s);
+<script>
+(() => {
+  const $=s=>document.querySelector(s);
 
-    // --- UI refs ---
-    const startBtn = $('#startBtn'), stopBtn = $('#stopBtn'), triggerBtn = $('#triggerBtn');
-    const armedBadge = $('#armedBadge'), statusText = $('#statusText');
-    const cameraSel = $('#cameraSelect'), envFacing = $('#envFacing');
-    const readers1d = $('#readers1d'), tryHarder = $('#tryHarder');
-    const beep1d = $('#beep1d'), beep2d = $('#beep2d');
-    const viewport = $('#viewport'), video2d = $('#video2d'), overlay = $('#overlay');
-    const octx = overlay.getContext('2d');
-    const results = $('#results'), tbody = $('#scanTbody'), clearBtn = $('#clearTable');
+  // UI
+  const startBtn=$('#startBtn'), stopBtn=$('#stopBtn'), triggerBtn=$('#triggerBtn');
+  const permBtn=$('#permBtn'), refreshBtn=$('#refreshBtn');
+  const cameraSel=$('#cameraSelect'), camInfo=$('#camInfo'), preferBack=$('#preferBack');
+  const readers1d=$('#readers1d'), tryHarder=$('#tryHarder'), beep1d=$('#beep1d'), beep2d=$('#beep2d');
+  const viewport=$('#viewport'), video2d=$('#video2d'), overlay=$('#overlay'), octx=overlay.getContext('2d');
+  const results=$('#results'), tbody=$('#scanBody'), armedBadge=$('#armedBadge'), statusText=$('#statusText');
 
-    // --- Mode ---
-    let mode = '1d'; // '1d' or '2d'
-    document.querySelectorAll('input[name="mode"]').forEach(r=>{
-      r.addEventListener('change', async (e)=>{
-        mode = e.target.value;
-        if (startBtn.disabled) await start();
-        else updatePreviewVisibility();
-      });
-    });
+  // Mode
+  let mode='1d';
+  document.querySelectorAll('input[name="mode"]').forEach(r=>{
+    r.addEventListener('change',async (e)=>{ mode=e.target.value; await restart(); });
+  });
 
-    // --- State ---
-    let ARMED = false, armTimer = null, last = { code:'', t:0 };
-    const DEDUPE_MS = 2000;
+  // State
+  let ARMED=false, armTimer=null, last={code:'',t:0}, DEDUPE=2000;
+  let currentDeviceId = localStorage.getItem('scanner.devId') || '';
+  let animRAF=null;
 
-    // --- 2D (ZXing) state ---
-    let reader2d = null, stream2d = null;
-
-    // --- Helpers ---
-    function dupe(code){ const n=Date.now(); if(code===last.code && n-last.t<DEDUPE_MS) return true; last={code,t:n}; return false; }
-    function setArmed(on){ ARMED=!!on; armedBadge.hidden=!ARMED; statusText.textContent=ARMED?'Armed (waiting for code)…':'Idle'; triggerBtn.disabled=ARMED; }
-    function armFor(ms=3000){ clearTimeout(armTimer); setArmed(true); armTimer=setTimeout(()=>setArmed(false), ms); }
-    function addBadge(fmt, code){ const el=document.createElement('div'); el.className='badge'; el.textContent=`${fmt}: ${code}`; results.prepend(el); }
-    function addRow(fmt, code){
-      const first=tbody.firstElementChild; if(first && first.children.length===1) tbody.removeChild(first);
-      const tr=document.createElement('tr'); const t1=document.createElement('td'); const t2=document.createElement('td'); const t3=document.createElement('td');
-      t1.textContent=fmt||'UNKNOWN'; t2.textContent=code||''; t3.textContent=new Date().toLocaleTimeString(); tr.append(t1,t2,t3); tbody.prepend(tr);
-    }
-    function beep(on){ if(!on) return; if('vibrate' in navigator) navigator.vibrate(20); let a=document.getElementById('beepAudio'); if(!a){ const f=document.getElementById('beepTpl').content.cloneNode(true); document.body.appendChild(f); a=document.getElementById('beepAudio'); } a.play().catch(()=>{}); }
-    function updatePreviewVisibility(){
-      if(mode==='2d'){ video2d.style.display=''; viewport.style.display='none'; }
-      else { video2d.style.display='none'; viewport.style.display=''; }
-      resizeOverlay();
-    }
-    function resizeOverlay(){
-      const el = (mode==='2d') ? video2d : viewport;
-      overlay.width  = el.offsetWidth || overlay.clientWidth;
-      overlay.height = el.offsetHeight || overlay.clientHeight;
-    }
-    function buildConstraints(){
-      const id = cameraSel && cameraSel.value;
-      if(id) return { deviceId:{ exact:id }, width:{ideal:1280}, height:{ideal:720} };
-      return { facingMode: envFacing.checked ? 'environment' : 'user', width:{ideal:1280}, height:{ideal:720} };
-    }
-
-    // ---------------- 1D: Quagga2 ----------------
-    function get1DReaders(){ return Array.from(readers1d.querySelectorAll('input:checked')).map(i=>i.value); }
-    function buildQuaggaConfig(){
-      return {
+  // 1D (Quagga)
+  async function start1D(){
+    await stop2D();
+    sizeOverlay();
+    return new Promise((resolve,reject)=>{
+      Quagga.init({
         locate: tryHarder.checked,
         inputStream: { type:'LiveStream', target: viewport, constraints: buildConstraints() },
         numOfWorkers: 0, locator:{ patchSize:'medium', halfSample:true },
         decoder: { readers: get1DReaders() }
-      };
-    }
-    async function start1D(){
-      await stop1D();
-      resizeOverlay();
-      return new Promise((resolve,reject)=>{
-        Quagga.init(buildQuaggaConfig(), err=>{
-          if(err){ console.error(err); statusText.textContent='Init error'; reject(err); return; }
-          Quagga.initialized = true;
+      }, err=>{
+        if(err){ console.error(err); statusText.textContent='Quagga init error'; reject(err); return; }
 
-          Quagga.onProcessed(res=>{
-            octx.clearRect(0,0,overlay.width,overlay.height);
-            if(res?.box){
-              octx.strokeStyle = ARMED ? 'lime' : 'rgba(173,216,230,.85)';
-              octx.lineWidth = 3;
-              octx.beginPath(); res.box.forEach((p,i)=> i?octx.lineTo(p.x,p.y):octx.moveTo(p.x,p.y));
-              octx.closePath(); octx.stroke();
-            }
-          });
-
-          Quagga.onDetected(res=>{
-            if(!ARMED) return;
-            const code = res?.codeResult?.code;
-            const fmt  = (res?.codeResult?.format||'').toUpperCase();
-            if(!code || dupe(code)) return;
-            addBadge(fmt, code); addRow(fmt, code); beep(beep1d.checked);
-            clearTimeout(armTimer); setArmed(false);
-          });
-
-          Quagga.start();
-          startBtn.disabled = true; stopBtn.disabled = false; setArmed(false); statusText.textContent='Ready';
-          resolve();
+        Quagga.onProcessed(res=>{
+          drawReticle(); // steady reticle even when nothing detected
+          if(res?.box){
+            octx.strokeStyle = ARMED ? 'lime' : 'deepskyblue';
+            octx.lineWidth = 3;
+            octx.beginPath(); res.box.forEach((p,i)=> i?octx.lineTo(p.x,p.y):octx.moveTo(p.x,p.y));
+            octx.closePath(); octx.stroke();
+          }
         });
+
+        Quagga.onDetected(res=>{
+          if(!ARMED) return;
+          const code=res?.codeResult?.code;
+          const fmt=(res?.codeResult?.format||'').toUpperCase();
+          if(!code || isDupe(code)) return;
+          onDecode(fmt, code, beep1d.checked);
+        });
+
+        Quagga.start();
+        startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
+        resolve();
       });
-    }
-    async function stop1D(){ try{ Quagga.offProcessed(); Quagga.offDetected(); }catch{} try{ Quagga.stop(); }catch{} Quagga.initialized=false; }
+    });
+  }
+  async function stop1D(){
+    try{ Quagga.offProcessed(); Quagga.offDetected(); }catch{}
+    try{ Quagga.stop(); }catch{}
+  }
+  function get1DReaders(){ return [...readers1d.querySelectorAll('input:checked')].map(i=>i.value); }
 
-    // ---------------- 2D: ZXing (QR + Data Matrix) ----------------
-    function ZX(){
-      // unpkg may export either window.ZXing or window.ZXingBrowser; both carry core classes
-      return window.ZXing || window.ZXingBrowser || {};
-    }
-    async function start2D(){
-      await stop2D();
-      updatePreviewVisibility();
+  // 2D (ZXing)
+  let reader2d=null, stream2d=null, raf2d=null;
+  function ZX(){ return window.ZXing || window.ZXingBrowser || {}; }
 
-      // 1) Get camera stream manually to satisfy iOS autoplay policy
-      const constraints = { video: buildConstraints(), audio:false };
-      stream2d = await navigator.mediaDevices.getUserMedia(constraints);
-      video2d.srcObject = stream2d;
-      video2d.setAttribute('playsinline','');
-      video2d.setAttribute('autoplay','');
-      video2d.muted = true;
-      await video2d.play().catch(()=>{ /* waits for user gesture if needed */ });
+  async function start2D(){
+    await stop1D();
+    updatePreviewVisibility();
+    // explicit stream for iOS autoplay
+    stream2d = await navigator.mediaDevices.getUserMedia({ video: buildConstraints(), audio:false });
+    video2d.srcObject = stream2d; video2d.setAttribute('playsinline',''); video2d.muted=true;
+    await video2d.play().catch(()=>{});
+    sizeOverlay();
 
-      const onReady = () => resizeOverlay();
-      video2d.addEventListener('loadedmetadata', onReady, { once:true });
-      video2d.addEventListener('playing', resizeOverlay);
+    // continuous reticle while playing
+    cancelAnimationFrame(raf2d);
+    const loop=()=>{ drawReticle(); raf2d=requestAnimationFrame(loop); }; loop();
 
-      // 2) Build ZXing MultiFormat reader with hints limited to QR + DataMatrix
-      const Z = ZX();
-      const BrowserMultiFormatReader = Z.BrowserMultiFormatReader || (Z.BrowserQRCodeReader && Z.BrowserQRCodeReader); // fallback
-      const BarcodeFormat = Z.BarcodeFormat || (window.ZXing && window.ZXing.BarcodeFormat);
-      const DecodeHintType= Z.DecodeHintType|| (window.ZXing && window.ZXing.DecodeHintType);
+    const Z=ZX();
+    const BMR = Z.BrowserMultiFormatReader || Z.BrowserQRCodeReader;
+    const BF  = Z.BarcodeFormat, H = Z.DecodeHintType;
+    if(!BMR||!BF||!H){ statusText.textContent='ZXing not available'; return; }
 
-      if (!BrowserMultiFormatReader || !BarcodeFormat || !DecodeHintType) {
-        statusText.textContent = 'ZXing not available';
-        return;
+    const hints=new Map();
+    hints.set(H.POSSIBLE_FORMATS, [BF.QR_CODE,BF.DATA_MATRIX].filter(Boolean));
+    hints.set(H.TRY_HARDER, true);
+    reader2d = new BMR(hints);
+
+    reader2d.decodeFromVideoElementContinuously(video2d,(res,err)=>{
+      if(!ARMED) return;
+      if(res){
+        const code = (typeof res.getText==='function') ? res.getText() : (res.text||'');
+        let fmt='QR_CODE';
+        try{ const f=(typeof res.getBarcodeFormat==='function')?String(res.getBarcodeFormat()):(res.format||''); if(f) fmt=f; }catch{}
+        if(!code || isDupe(code)) return;
+        onDecode(fmt, code, beep2d.checked);
       }
-
-      const formats = [BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX].filter(Boolean);
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, formats);
-      hints.set(DecodeHintType.TRY_HARDER, true);
-
-      reader2d = new BrowserMultiFormatReader(hints);
-
-      reader2d.decodeFromVideoElementContinuously(video2d, (res, err) => {
-        // Draw a simple reticle
-        octx.clearRect(0,0,overlay.width,overlay.height);
-        octx.strokeStyle = ARMED ? 'lime' : 'rgba(173,216,230,.85)';
-        octx.lineWidth = 2; const w=overlay.width,h=overlay.height;
-        octx.strokeRect(w*0.25,h*0.25,w*0.5,h*0.5);
-
-        if (!ARMED) return;
-
-        if (res) {
-          const code = (typeof res.getText==='function') ? res.getText() : (res.text||'');
-          // Try to read a human label for format
-          let fmt = 'QR_CODE';
-          try {
-            const f = (typeof res.getBarcodeFormat==='function') ? String(res.getBarcodeFormat()) : (res.format||'');
-            if (f) fmt = f;
-          } catch {}
-          if (!code || dupe(code)) return;
-          addBadge(fmt, code); addRow(fmt, code); beep(beep2d.checked);
-          clearTimeout(armTimer); setArmed(false);
-        }
-      });
-
-      startBtn.disabled = true; stopBtn.disabled = false; setArmed(false); statusText.textContent='Ready';
-    }
-    async function stop2D(){
-      try{ reader2d?.reset?.(); }catch{}
-      try{
-        if(stream2d){ stream2d.getTracks().forEach(t=>t.stop()); stream2d=null; }
-      }catch{}
-      video2d.srcObject = null;
-      octx.clearRect(0,0,overlay.width,overlay.height);
-      updatePreviewVisibility();
-    }
-
-    // ---------------- Shared start/stop ----------------
-    async function start(){ if(mode==='2d'){ await stop1D(); await start2D(); } else { await stop2D(); await start1D(); } }
-    async function stop(){ await stop1D(); await stop2D(); startBtn.disabled=false; stopBtn.disabled=true; setArmed(false); statusText.textContent='Stopped'; }
-
-    // ---------------- Events ----------------
-    startBtn.addEventListener('click', start);
-    stopBtn .addEventListener('click', stop);
-    triggerBtn.addEventListener('click', ()=> armFor(3000));
-    clearBtn.addEventListener('click', ()=>{
-      tbody.innerHTML = '<tr><td colspan="3" class="center muted">No scans yet</td></tr>';
-      results.innerHTML = '';
     });
 
-    // Restart active pipeline on changes
-    readers1d.addEventListener('change', async ()=>{ if(startBtn.disabled && mode==='1d') await start1D(); });
-    tryHarder.addEventListener('change', async ()=>{ if(startBtn.disabled && mode==='1d') await start1D(); });
-    envFacing.addEventListener('change', async ()=>{ if(startBtn.disabled) await start(); });
-    cameraSel .addEventListener('change', async ()=>{ if(startBtn.disabled) await start(); });
+    startBtn.disabled=true; stopBtn.disabled=false; setArmed(false); statusText.textContent='Ready';
+  }
+  async function stop2D(){
+    try{ reader2d?.reset?.(); }catch{}
+    try{ if(stream2d){ stream2d.getTracks().forEach(t=>t.stop()); stream2d=null; } }catch{}
+    cancelAnimationFrame(raf2d); video2d.srcObject=null; updatePreviewVisibility(); clearOverlay();
+  }
 
-    // Camera list (labels appear after permission)
-    (async () => {
-      try {
-        const devs = await navigator.mediaDevices.enumerateDevices();
-        const vids = devs.filter(d=>d.kind==='videoinput');
-        cameraSel.innerHTML = '';
-        vids.forEach((d,i)=>{
-          const o=document.createElement('option');
-          o.value=d.deviceId;
-          o.textContent=d.label || `Camera ${i+1}`;
-          cameraSel.appendChild(o);
-        });
-      } catch {}
-    })();
+  // Shared start/stop/restart
+  async function start(){ if(mode==='2d') await start2D(); else await start1D(); }
+  async function stop(){ await stop1D(); await stop2D(); startBtn.disabled=false; stopBtn.disabled=true; setArmed(false); statusText.textContent='Stopped'; }
+  async function restart(){ if(!startBtn.disabled) { updatePreviewVisibility(); return; } await start(); }
 
-    // Keep overlay sized
-    addEventListener('resize', resizeOverlay);
+  // Cameras
+  function buildConstraints(){
+    const id = cameraSel.value || currentDeviceId;
+    if(id){ return { deviceId:{ exact:id }, width:{ideal:1280}, height:{ideal:720} }; }
+    return { facingMode: (preferBack.checked?'environment':'user'), width:{ideal:1280}, height:{ideal:720} };
+  }
+  async function ensurePermission(){
+    try{
+      const tmp=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+      tmp.getTracks().forEach(t=>t.stop());
+    }catch(e){ console.warn('Permission error', e); }
+  }
+  async function listCameras(){
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const vids=devs.filter(d=>d.kind==='videoinput');
+    cameraSel.innerHTML='';
+    vids.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId;
+      o.textContent=d.label || `Camera ${i+1}`;
+      cameraSel.appendChild(o);
+    });
+    // Try to keep selection stable
+    if(currentDeviceId && [...cameraSel.options].some(o=>o.value===currentDeviceId)){
+      cameraSel.value=currentDeviceId;
+    }else if(preferBack.checked){
+      const back=[...cameraSel.options].find(o=>/back|rear|environment/i.test(o.textContent));
+      if(back) cameraSel.value=back.value;
+    }
+    currentDeviceId = cameraSel.value || currentDeviceId || '';
+    camInfo.textContent = cameraSel.selectedOptions[0]?.textContent || 'No camera selected';
+    localStorage.setItem('scanner.devId', currentDeviceId || '');
+  }
+
+  // Reticle / overlay
+  function sizeOverlay(){
+    const el = (mode==='2d') ? video2d : viewport;
+    overlay.width  = el.offsetWidth || overlay.clientWidth;
+    overlay.height = el.offsetHeight || overlay.clientHeight;
+  }
+  function clearOverlay(){ octx.clearRect(0,0,overlay.width,overlay.height); }
+  function drawReticle(){
+    clearOverlay();
+    const w=overlay.width, h=overlay.height;
+    const rw=w*0.55, rh=h*0.55;
+    const x=(w-rw)/2, y=(h-rh)/2;
+    octx.strokeStyle = ARMED? 'lime' : 'rgba(173,216,230,.9)';
+    octx.lineWidth = 2;
+    octx.strokeRect(x,y,rw,rh);
+  }
+
+  // Decode handlers
+  function onDecode(fmt, code, doBeep){
+    addBadge(fmt, code); addRow(fmt, code); beep(doBeep);
+    clearTimeout(armTimer); setArmed(false);
+  }
+  function addBadge(fmt, code){ const el=document.createElement('div'); el.className='badge'; el.textContent=`${fmt}: ${code}`; results.prepend(el); }
+  function addRow(fmt,code){
+    if(tbody.firstElementChild && tbody.firstElementChild.children.length===1) tbody.innerHTML='';
+    const tr=document.createElement('tr'); const t1=document.createElement('td'); const t2=document.createElement('td'); const t3=document.createElement('td');
+    t1.textContent=fmt; t2.textContent=code; t3.textContent=new Date().toLocaleTimeString();
+    tr.append(t1,t2,t3); tbody.prepend(tr);
+  }
+  function beep(on){
+    if(!on) return;
+    if('vibrate' in navigator) try{ navigator.vibrate(20); }catch{}
+    let a=document.getElementById('beepAudio');
+    if(!a){ const f=document.getElementById('beepTpl').content.cloneNode(true); document.body.appendChild(f); a=document.getElementById('beepAudio'); }
+    a.play().catch(()=>{});
+  }
+  function isDupe(code){ const now=Date.now(); if(code===last.code && (now-last.t)<DEDUPE) return true; last={code,t:now}; return false; }
+  function setArmed(on){ ARMED=!!on; armedBadge.hidden=!ARMED; statusText.textContent=ARMED?'Armed (3s)…':'Idle'; triggerBtn.disabled=ARMED; }
+  function arm(ms=3000){ clearTimeout(armTimer); setArmed(true); armTimer=setTimeout(()=>setArmed(false),ms); }
+
+  // Preview visibility per mode
+  function updatePreviewVisibility(){
+    if(mode==='2d'){ video2d.style.display=''; viewport.style.display='none'; }
+    else { video2d.style.display='none'; viewport.style.display=''; }
+    sizeOverlay(); drawReticle();
+  }
+
+  // Events
+  startBtn.addEventListener('click', start);
+  stopBtn.addEventListener('click', stop);
+  triggerBtn.addEventListener('click', ()=>arm(3000));
+  $('#clearBtn').addEventListener('click', ()=>{ tbody.innerHTML='<tr><td colspan="3" class="center subtle">No scans yet</td></tr>'; results.innerHTML=''; });
+
+  cameraSel.addEventListener('change', async ()=>{
+    currentDeviceId = cameraSel.value; localStorage.setItem('scanner.devId', currentDeviceId||'');
+    camInfo.textContent = cameraSel.selectedOptions[0]?.textContent || 'No camera selected';
+    if(!startBtn.disabled) return; // not running
+    await restart();
+  });
+  preferBack.addEventListener('change', async ()=>{ if(startBtn.disabled) await restart(); });
+  readers1d.addEventListener('change', async ()=>{ if(startBtn.disabled && mode==='1d') await start1D(); });
+  tryHarder.addEventListener('change', async ()=>{ if(startBtn.disabled && mode==='1d') await start1D(); });
+  permBtn.addEventListener('click', async ()=>{ await ensurePermission(); await listCameras(); });
+  refreshBtn.addEventListener('click', async ()=>{ await listCameras(); if(startBtn.disabled) await restart(); });
+
+  window.addEventListener('resize', sizeOverlay);
+
+  // Boot: get permission (labels), list cameras, show reticle
+  (async () => {
+    await ensurePermission();
+    await listCameras();
     updatePreviewVisibility();
-  </script>
+  })();
+})();
+</script>
 </body>
 </html>
